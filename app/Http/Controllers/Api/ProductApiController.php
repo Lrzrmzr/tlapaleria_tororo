@@ -42,8 +42,7 @@ class ProductApiController extends Controller
             $query->where('active', $request->active);
         }
 
-        // Paginación
-        $perPage = $request->get('per_page', 50);
+        $perPage  = min(max((int) $request->get('per_page', 50), 1), 200);
         $products = $query->paginate($perPage);
 
         return response()->json([
@@ -63,7 +62,7 @@ class ProductApiController extends Controller
     /**
      * Obtener un producto específico
      */
-    public function show($id)
+    public function show(int $id)
     {
         $product = Product::with(['supplier', 'categories', 'inventory.branch'])
             ->findOrFail($id);
@@ -101,7 +100,7 @@ class ProductApiController extends Controller
     /**
      * Actualizar un producto
      */
-    public function update(Request $request, $id)
+    public function update(Request $request, int $id)
     {
         $product = Product::findOrFail($id);
 
@@ -127,7 +126,7 @@ class ProductApiController extends Controller
     /**
      * Eliminar un producto
      */
-    public function destroy($id)
+    public function destroy(int $id)
     {
         $product = Product::findOrFail($id);
         $product->delete();

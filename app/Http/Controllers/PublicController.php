@@ -37,7 +37,10 @@ class PublicController extends Controller
     private function getPublicProducts()
     {
         return Product::with(['suppliers:id,name'])
+            ->where('active', true)
             ->select(['id', 'name', 'description'])
+            ->orderBy('name')
+            ->limit(200)
             ->get()
             ->map(function ($product) {
                 $category = $this->determineCategory($product->name . ' ' . ($product->description ?? ''));
@@ -55,7 +58,7 @@ class PublicController extends Controller
             });
     }
 
-    private function determineCategory($text)
+    private function determineCategory(string $text)
     {
         $text = strtolower($text);
 

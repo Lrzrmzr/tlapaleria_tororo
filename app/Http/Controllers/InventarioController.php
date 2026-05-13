@@ -38,7 +38,6 @@ class InventarioController extends Controller
             $search = $request->search;
             $query->whereHas('product', function ($q) use ($search) {
                 $q->where('name', 'like', "%{$search}%")
-                  ->orWhere('code', 'like', "%{$search}%")
                   ->orWhere('barcode', 'like', "%{$search}%");
             });
         }
@@ -56,9 +55,14 @@ class InventarioController extends Controller
             }
         }
 
-        // Ordenamiento
-        $sortBy = $request->get('sort_by', 'updated_at');
-        $sortOrder = $request->get('sort_order', 'desc');
+        // Ordenamiento — whitelist para prevenir SQL injection
+        $allowedSorts  = ['updated_at', 'created_at', 'stock', 'min_stock', 'cost', 'product_name'];
+        $allowedOrders = ['asc', 'desc'];
+        $sortBy    = in_array($request->sort_by, $allowedSorts, true)    ? $request->sort_by    : 'updated_at';
+        $sortOrder = in_array($request->sort_order, $allowedOrders, true) ? $request->sort_order : 'desc';
+
+        // Paginación — límite máximo para prevenir DoS
+        $perPage = min(max((int) $request->get('per_page', 50), 1), 200);
 
         if ($sortBy === 'product_name') {
             // Ordenar por nombre de producto requiere un join
@@ -69,14 +73,12 @@ class InventarioController extends Controller
             $query->orderBy($sortBy, $sortOrder);
         }
 
-        // Paginación (50 por página)
-        $perPage = $request->get('per_page', 50);
         $inventarios = $query->paginate($perPage)->through(function ($inventario) {
             return [
                 'id' => $inventario->id,
                 'product_id' => $inventario->product_id,
                 'product_name' => $inventario->product->name ?? 'Producto eliminado',
-                'product_code' => $inventario->product->code ?? '',
+                'product_code' => $inventario->product->barcode ?? '',
                 'product_price' => $inventario->product->price ?? 0,
                 'branch_id' => $inventario->branch_id,
                 'branch_name' => $inventario->branch ? $inventario->branch->name : '⚠️ Sin Sucursal',
@@ -114,7 +116,7 @@ class InventarioController extends Controller
             return [
                 'id' => $product->id,
                 'name' => $product->name,
-                'code' => $product->code,
+                'code' => $product->barcode,
                 'price' => $product->price,
             ];
         });
@@ -216,20 +218,21 @@ class InventarioController extends Controller
 
     public function update(Request $request, $id)
     {
+        $inventario = BranchInventory::findOrFail($id);
+        $this->authorizeBranch($inventario->branch_id, $request);
+
         $request->validate([
-            'quantity' => 'required|integer|min:0',
+            'quantity'  => 'required|integer|min:0',
             'min_stock' => 'required|integer|min:0',
             'max_stock' => 'nullable|integer|min:0',
-            'cost' => 'nullable|numeric|min:0',
+            'cost'      => 'nullable|numeric|min:0',
         ]);
 
-        $inventario = BranchInventory::findOrFail($id);
-
         $inventario->update([
-            'stock' => $request->quantity,
+            'stock'     => $request->quantity,
             'min_stock' => $request->min_stock,
             'max_stock' => $request->max_stock ?? 0,
-            'cost' => $request->cost ?? 0,
+            'cost'      => $request->cost ?? 0,
         ]);
 
         return redirect()->back()->with('success', 'Inventario actualizado correctamente');
@@ -237,24 +240,26 @@ class InventarioController extends Controller
 
     public function ajustarStock(Request $request, $id)
     {
+        $inventario = BranchInventory::findOrFail($id);
+        $this->authorizeBranch($inventario->branch_id, $request);
+
         $request->validate([
-            'cantidad' => 'required|integer',
-            'tipo' => 'required|in:entrada,salida',
+            'cantidad' => 'required|integer|min:1',
+            'tipo'     => 'required|in:entrada,salida',
         ]);
 
-        $inventario = BranchInventory::findOrFail($id);
-        $nuevaCantidad = $inventario->stock;
-
         if ($request->tipo === 'entrada') {
-            $nuevaCantidad += $request->cantidad;
+            $inventario->increment('stock', $request->cantidad);
         } else {
-            $nuevaCantidad -= $request->cantidad;
-            if ($nuevaCantidad < 0) {
-                $nuevaCantidad = 0;
+            // Decremento atómico — no permite stock negativo
+            $affected = BranchInventory::where('id', $inventario->id)
+                ->where('stock', '>=', $request->cantidad)
+                ->decrement('stock', $request->cantidad);
+
+            if (!$affected) {
+                return redirect()->back()->withErrors(['error' => 'Stock insuficiente para esta salida.']);
             }
         }
-
-        $inventario->update(['stock' => $nuevaCantidad]);
 
         return redirect()->back()->with('success', 'Stock ajustado correctamente');
     }
@@ -262,8 +267,18 @@ class InventarioController extends Controller
     public function destroy($id)
     {
         $inventario = BranchInventory::findOrFail($id);
+        $this->authorizeBranch($inventario->branch_id, request());
+
         $inventario->delete();
         return redirect()->back()->with('success', 'Inventario eliminado correctamente');
+    }
+
+    private function authorizeBranch(?int $branchId, \Illuminate\Http\Request $request): void
+    {
+        $isRoot = $request->is_root ?? false;
+        if (!$isRoot && $branchId !== $request->user_branch_id) {
+            abort(403, 'No tienes acceso a datos de otra sucursal.');
+        }
     }
 
     private function getStockStatus($quantity, $minStock)

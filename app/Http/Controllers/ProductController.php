@@ -12,15 +12,15 @@ class ProductController extends Controller
     public function index(Request $request)
     {
         // Construir query con filtros
-        $query = Product::with(['supplier', 'inventory', 'suppliers', 'categories']);
+        $query = Product::with(['supplier', 'branchInventory', 'suppliers', 'categories']);
 
         // Filtro: Búsqueda por nombre, descripción o código de barras
         if ($request->filled('search')) {
             $search = $request->search;
             $query->where(function ($q) use ($search) {
-                $q->where('name', 'like', "%{$search}%")
-                  ->orWhere('description', 'like', "%{$search}%")
-                  ->orWhere('barcode', 'like', "%{$search}%");
+                $q->where('name', 'ilike', "%{$search}%")
+                  ->orWhere('description', 'ilike', "%{$search}%")
+                  ->orWhere('barcode', 'ilike', "%{$search}%");
             });
         }
 
@@ -38,25 +38,27 @@ class ProductController extends Controller
 
         // Filtro: Solo productos con stock
         if ($request->filled('with_stock') && $request->with_stock) {
-            $query->whereHas('inventory', function ($q) {
+            $query->whereHas('branchInventory', function ($q) {
                 $q->where('stock', '>', 0);
             });
         }
 
         // Filtro: Solo productos sin inventario
         if ($request->filled('without_inventory') && $request->without_inventory) {
-            $query->whereDoesntHave('inventory');
+            $query->whereDoesntHave('branchInventory');
         }
 
-        // Ordenamiento
-        $sortBy = $request->get('sort_by', 'created_at');
-        $sortOrder = $request->get('sort_order', 'desc');
+        // Ordenamiento — whitelist para prevenir SQL injection por sort_by
+        $allowedSorts  = ['name', 'price', 'cost', 'created_at', 'updated_at'];
+        $allowedOrders = ['asc', 'desc'];
+        $sortBy    = in_array($request->sort_by, $allowedSorts, true)    ? $request->sort_by    : 'created_at';
+        $sortOrder = in_array($request->sort_order, $allowedOrders, true) ? $request->sort_order : 'desc';
         $query->orderBy($sortBy, $sortOrder);
 
-        // Paginación (50 por página)
-        $perPage = $request->get('per_page', 50);
+        // Paginación — límite máximo para prevenir DoS por per_page masivo
+        $perPage = min(max((int) $request->get('per_page', 50), 1), 200);
         $productos = $query->paginate($perPage)->through(function ($producto) {
-            $inventario = $producto->inventory->first();
+            $inventario = $producto->branchInventory->first();
 
             // Obtener información de todos los proveedores
             $proveedoresData = $producto->suppliers->map(function ($supplier) {
@@ -127,10 +129,10 @@ class ProductController extends Controller
 
         // Estadísticas (optimizadas)
         $totalProductos = Product::count();
-        $productosConStock = Product::whereHas('inventory', function ($query) {
+        $productosConStock = Product::whereHas('branchInventory', function ($query) {
             $query->where('stock', '>', 0);
         })->count();
-        $productosSinInventario = Product::whereDoesntHave('inventory')->count();
+        $productosSinInventario = Product::whereDoesntHave('branchInventory')->count();
 
         // Valor total del inventario (optimizado con join)
         $valorTotalInventario = \DB::table('products')
@@ -282,7 +284,7 @@ class ProductController extends Controller
     public function destroy(Product $producto)
     {
         // Verificar si el producto tiene inventario
-        if ($producto->inventory()->exists()) {
+        if ($producto->branchInventory()->exists()) {
             return redirect()->back()->withErrors(['error' => 'No se puede eliminar un producto con inventario. Elimina primero el inventario.']);
         }
 

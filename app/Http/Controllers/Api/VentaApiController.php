@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Sale;
 use App\Models\Venta;
 use App\Models\VentaItem;
 use App\Models\BranchInventory;
@@ -35,7 +36,7 @@ class VentaApiController extends Controller
             $query->whereDate('created_at', '<=', $request->date_to);
         }
 
-        $perPage = $request->get('per_page', 50);
+        $perPage = min(max((int) $request->get('per_page', 50), 1), 200);
         $ventas = $query->paginate($perPage);
 
         return response()->json([
@@ -57,7 +58,7 @@ class VentaApiController extends Controller
     /**
      * Obtener una venta específica
      */
-    public function show($id)
+    public function show(int $id)
     {
         $venta = Venta::with(['user', 'branch', 'items.product'])->findOrFail($id);
 
@@ -73,12 +74,29 @@ class VentaApiController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'branch_id' => 'required|exists:branches,id',
-            'items' => 'required|array|min:1',
-            'items.*.product_id' => 'required|exists:products,id',
-            'items.*.quantity' => 'required|integer|min:1',
+            'branch_id'            => 'required|exists:branches,id',
+            'items'                => 'required|array|min:1',
+            'items.*.product_id'   => 'required|exists:products,id',
+            'items.*.quantity'     => 'required|integer|min:1',
             'items.*.precio_venta' => 'required|numeric|min:0',
+            'idempotency_key'      => 'nullable|string|max:64',
         ]);
+
+        // Idempotencia: acepta clave en body o en header Idempotency-Key
+        $idempotencyKey = $validated['idempotency_key']
+            ?? $request->header('Idempotency-Key');
+
+        if ($idempotencyKey) {
+            $existing = Sale::where('idempotency_key', $idempotencyKey)->first();
+            if ($existing) {
+                return response()->json([
+                    'success'  => true,
+                    'message'  => 'Venta ya registrada (idempotente).',
+                    'data'     => $existing->load(['items.product', 'user', 'branch']),
+                    'idempotent' => true,
+                ], 200);
+            }
+        }
 
         DB::beginTransaction();
         try {
@@ -115,11 +133,12 @@ class VentaApiController extends Controller
 
             // Crear la venta
             $venta = Venta::create([
-                'branch_id' => $validated['branch_id'],
-                'user_id' => $request->user()->id,
-                'subtotal' => $subtotal,
-                'total' => $subtotal,
-                'utilidad' => $utilidad,
+                'branch_id'       => $validated['branch_id'],
+                'user_id'         => $request->user()->id,
+                'subtotal'        => $subtotal,
+                'total'           => $subtotal,
+                'utilidad'        => $utilidad,
+                'idempotency_key' => $idempotencyKey ?? null,
             ]);
 
             // Crear los items y actualizar inventario
@@ -162,7 +181,7 @@ class VentaApiController extends Controller
     /**
      * Eliminar una venta
      */
-    public function destroy($id)
+    public function destroy(int $id)
     {
         $user = request()->user();
         $userRole = $user->roles->first();

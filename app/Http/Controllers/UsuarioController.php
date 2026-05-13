@@ -68,24 +68,38 @@ class UsuarioController extends Controller
 
     public function asignarRol(Request $request)
     {
-        $user = User::with('roles')->find(Auth::id());
-        $userRole = $user->roles->first();
+        $currentUser = User::with('roles')->find(Auth::id());
 
-        if ($user->id !== 1 && ($userRole->name ?? null) !== 'administrador') {
-            abort(403, 'Solo el administrador puede asignar roles');
+        if (!$currentUser->isRoot() && !$currentUser->isBranchAdmin()) {
+            abort(403, 'Solo el administrador puede asignar roles.');
+        }
+
+        $request->validate([
+            'usuario_id' => 'required|exists:users,id',
+            'rol_id'     => 'nullable|exists:roles,id',
+        ]);
+
+        $rolRoot = Role::where('name', 'root')->first();
+
+        // Solo root puede asignar el rol root
+        if ($request->rol_id && $rolRoot && $request->rol_id == $rolRoot->id && !$currentUser->isRoot()) {
+            abort(403, 'No puedes asignar el rol root.');
         }
 
         $usuario = User::findOrFail($request->usuario_id);
 
-        // Remover roles existentes
+        // Administradores no pueden modificar a usuarios root
+        if (!$currentUser->isRoot() && $usuario->isRoot()) {
+            abort(403, 'No puedes modificar el rol de un usuario root.');
+        }
+
         $usuario->roles()->detach();
 
-        // Asignar nuevo rol si se proporcionó
         if ($request->rol_id) {
             $usuario->roles()->attach($request->rol_id);
         }
 
-        return redirect()->back();
+        return redirect()->back()->with('success', 'Rol asignado correctamente.');
     }
 
     public function asignarSucursal(Request $request, User $user)

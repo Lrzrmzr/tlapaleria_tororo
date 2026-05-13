@@ -118,7 +118,7 @@ class Product extends Model
      */
     public function getStockAttribute()
     {
-        return $this->inventory()->sum('quantity');
+        return $this->branchInventory()->sum('stock');
     }
 
     /**

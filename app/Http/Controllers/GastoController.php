@@ -1,6 +1,7 @@
 <?php
 namespace App\Http\Controllers;
 
+use App\Http\Requests\StoreGastoRequest;
 use App\Models\Gasto;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -8,23 +9,26 @@ use Inertia\Inertia;
 
 class GastoController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        $gastos = Gasto::with('user')
-            ->latest()
-            ->get()
-            ->map(function ($gasto) {
-                return [
-                    'id' => $gasto->id,
-                    'descripcion' => $gasto->descripcion,
-                    'total' => $gasto->total,
-                    'created_at' => $gasto->created_at->toISOString(),
-                    'user' => $gasto->user ? [
-                        'id' => $gasto->user->id,
-                        'name' => $gasto->user->name,
-                    ] : null,
-                ];
-            });
+        $query = Gasto::with('user');
+
+        if (!($request->is_root ?? false)) {
+            $query->where('branch_id', $request->user_branch_id);
+        }
+
+        $gastos = $query->latest()
+            ->paginate(50)
+            ->through(fn($gasto) => [
+                'id'          => $gasto->id,
+                'descripcion' => $gasto->descripcion,
+                'monto'       => $gasto->monto,
+                'created_at'  => $gasto->created_at->toISOString(),
+                'user'        => $gasto->user ? [
+                    'id'   => $gasto->user->id,
+                    'name' => $gasto->user->name,
+                ] : null,
+            ]);
 
         $user = Auth::user();
 
@@ -39,30 +43,54 @@ class GastoController extends Controller
         ]);
     }
 
-    public function store(Request $request)
+    public function store(StoreGastoRequest $request)
     {
-        $request->validate([
-            'descripcion' => 'required|string|max:255',
-            'total' => 'required|numeric',
-        ]);
         Gasto::create([
             'descripcion' => $request->descripcion,
-            'total' => $request->total,
-            'user_id' => Auth::id(),
+            'monto'       => $request->monto,
+            'user_id'     => Auth::id(),
+            'branch_id'   => $request->user_branch_id,
         ]);
+        return redirect()->back();
+    }
+
+    public function update(Request $request, Gasto $gasto)
+    {
+        $this->authorizeBranch($gasto->branch_id, $request);
+
+        $request->validate([
+            'descripcion' => 'required|string|max:255',
+            'monto'       => 'required|numeric|min:0.01',
+        ]);
+
+        $gasto->update([
+            'descripcion' => $request->descripcion,
+            'monto'       => $request->monto,
+        ]);
+
         return redirect()->back();
     }
 
     public function destroy(Gasto $gasto)
     {
-        $user = Auth::user();
+        $user     = Auth::user();
         $userRole = $user->roles->first();
 
-        if (!$userRole || ($userRole->name !== 'administrador' && $userRole->name !== 'root')) {
-            abort(403, 'Solo el administrador puede eliminar gastos');
+        if (!$userRole || !in_array($userRole->name, ['administrador', 'root'])) {
+            abort(403, 'Solo el administrador puede eliminar gastos.');
         }
+
+        $this->authorizeBranch($gasto->branch_id, request());
 
         $gasto->delete();
         return redirect()->back();
+    }
+
+    private function authorizeBranch(?int $resourceBranchId, \Illuminate\Http\Request $request): void
+    {
+        $isRoot = $request->is_root ?? false;
+        if (!$isRoot && $resourceBranchId !== $request->user_branch_id) {
+            abort(403, 'No tienes acceso a datos de otra sucursal.');
+        }
     }
 }

@@ -47,7 +47,7 @@ class InventarioApiController extends Controller
             }
         }
 
-        $perPage = $request->get('per_page', 50);
+        $perPage     = min(max((int) $request->get('per_page', 50), 1), 200);
         $inventarios = $query->paginate($perPage);
 
         return response()->json([
@@ -65,7 +65,7 @@ class InventarioApiController extends Controller
     /**
      * Obtener inventario de un producto específico
      */
-    public function show($id)
+    public function show(int $id)
     {
         $inventario = BranchInventory::with(['product.supplier', 'branch'])
             ->findOrFail($id);
@@ -79,7 +79,7 @@ class InventarioApiController extends Controller
     /**
      * Ajustar stock de inventario
      */
-    public function adjustStock(Request $request, $id)
+    public function adjustStock(Request $request, int $id)
     {
         $validated = $request->validate([
             'adjustment' => 'required|integer',

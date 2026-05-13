@@ -3,7 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\SystemSetting;
-use App\Models\Inventory;
+use App\Models\BranchInventory;
 use App\Models\Faltante;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -32,10 +32,10 @@ class SettingsController extends Controller
 
         // Estadísticas del sistema
         $stats = [
-            'productos_stock_bajo' => Inventory::where('stock', '<=', SystemSetting::stockBajoThreshold())
+            'productos_stock_bajo' => BranchInventory::where('stock', '<=', SystemSetting::stockBajoThreshold())
                 ->where('stock', '>', 0)
                 ->count(),
-            'productos_agotados' => Inventory::where('stock', 0)->count(),
+            'productos_agotados' => BranchInventory::where('stock', 0)->count(),
             'faltantes_pendientes' => Faltante::where('confirmado', false)->count(),
         ];
 
@@ -76,7 +76,7 @@ class SettingsController extends Controller
         $threshold = SystemSetting::stockBajoThreshold();
 
         // Obtener productos con stock bajo que no tengan faltantes pendientes
-        $productosStockBajo = Inventory::with('product')
+        $productosStockBajo = BranchInventory::with('product')
             ->where('stock', '<=', $threshold)
             ->where('stock', '>=', 0)
             ->get();
@@ -93,11 +93,14 @@ class SettingsController extends Controller
                 $cantidadSugerida = max($inventario->min_stock - $inventario->stock, 10);
 
                 Faltante::create([
-                    'product_id' => $inventario->product_id,
-                    'user_id' => Auth::id(),
-                    'quantity' => $cantidadSugerida,
-                    'notes' => 'Generado automáticamente por stock bajo (Stock actual: ' . $inventario->stock . ')',
-                    'confirmado' => false,
+                    'product_id'  => $inventario->product_id,
+                    'descripcion' => $inventario->product->name ?? 'Producto sin nombre',
+                    'pedido'      => 'GENERAL',
+                    'branch_id'   => $inventario->branch_id,
+                    'user_id'     => Auth::id(),
+                    'quantity'    => $cantidadSugerida,
+                    'notes'       => 'Generado automáticamente por stock bajo (Stock actual: ' . $inventario->stock . ')',
+                    'confirmado'  => false,
                 ]);
 
                 $generados++;
@@ -113,6 +116,6 @@ class SettingsController extends Controller
     private function isRootUser(): bool
     {
         $user = Auth::user();
-        return $user && $user->roles()->where('roles.id', 1)->exists();
+        return $user instanceof \App\Models\User && $user->isRoot();
     }
 }

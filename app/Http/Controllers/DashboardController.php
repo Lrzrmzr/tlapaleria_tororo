@@ -93,17 +93,13 @@ class DashboardController extends Controller
         // Alertas
         $alerts = [];
 
-        // Alerta de stock bajo (productos con inventario de 2 o menos)
-        $productosStockBajo = 0;
+        // Alerta de stock bajo — query directa, sin cargar todos los productos en memoria
         try {
-            $productos = Product::with('inventory')->get();
-            foreach ($productos as $producto) {
-                $stockTotal = $producto->inventory->sum('quantity');
-                if ($stockTotal >= 0 && $stockTotal <= 2) {
-                    $productosStockBajo++;
-                }
-            }
-        } catch (\Exception $e) {
+            $productosStockBajo = \App\Models\BranchInventory::selectRaw('product_id')
+                ->groupBy('product_id')
+                ->havingRaw('SUM(stock) BETWEEN 0 AND 2')
+                ->count();
+        } catch (\Exception) {
             $productosStockBajo = 0;
         }
 

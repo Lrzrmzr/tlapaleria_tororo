@@ -326,6 +326,12 @@ function formatMoney(value) {
                                         Descripción
                                     </th>
                                     <th class="px-6 py-4 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                        Cant. Sugerida
+                                    </th>
+                                    <th class="px-6 py-4 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                        Notas
+                                    </th>
+                                    <th class="px-6 py-4 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                                         Pedido
                                     </th>
                                     <th class="px-6 py-4 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
@@ -341,7 +347,7 @@ function formatMoney(value) {
                             </thead>
                             <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                                 <tr v-if="faltantes.length === 0">
-                                    <td colspan="7" class="px-6 py-12 text-center text-gray-500 dark:text-gray-400">
+                                    <td colspan="9" class="px-6 py-12 text-center text-gray-500 dark:text-gray-400">
                                         <svg class="w-16 h-16 mx-auto mb-4 text-gray-300 dark:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                                         </svg>
@@ -368,6 +374,17 @@ function formatMoney(value) {
                                     <td class="px-6 py-4">
                                         <span class="text-sm text-gray-900 dark:text-white">
                                             {{ faltante.descripcion }}
+                                        </span>
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-center">
+                                        <span v-if="faltante.quantity" class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300">
+                                            {{ faltante.quantity }}
+                                        </span>
+                                        <span v-else class="text-gray-400 dark:text-gray-500 text-sm">—</span>
+                                    </td>
+                                    <td class="px-6 py-4 max-w-[180px]">
+                                        <span class="text-sm text-gray-600 dark:text-gray-400 truncate block" :title="faltante.notes">
+                                            {{ faltante.notes || '—' }}
                                         </span>
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap">

@@ -3,22 +3,18 @@ import { ref, computed } from 'vue';
 import Sidebar from '@/Components/Sidebar.vue';
 import Dropdown from '@/Components/Dropdown.vue';
 import DropdownLink from '@/Components/DropdownLink.vue';
-import { Link, usePage, router } from '@inertiajs/vue3';
+import AsistenteIA from '@/Components/AsistenteIA.vue';
+import { Link, usePage } from '@inertiajs/vue3';
 import { useAuth } from '@/composables/useAuth';
 
 const showingMobileMenu = ref(false);
 const sidebarCollapsed = ref(false);
 const page = usePage();
-const { user: authUser, logout, hasRole } = useAuth();
+const { user: authUser, logout } = useAuth();
 
 // Get user from OAuth token or fallback to Inertia props
 const currentUser = computed(() => {
     return authUser.value || page.props.auth?.user;
-});
-
-// Check if user is root
-const isRoot = computed(() => {
-    return hasRole('root');
 });
 
 // Handle logout with OAuth 2.0
@@ -154,5 +150,8 @@ const toggleMobileMenu = () => {
                 <slot />
             </main>
         </div>
+
+        <!-- Asistente IA flotante -->
+        <AsistenteIA />
     </div>
 </template>

@@ -14,17 +14,8 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        $user = User::factory()->create([
-            'name' => 'Test User',
-            'email' => 'test@example.com',
-        ]);
-
-        // Asignar rol root al primer usuario
-        DB::table('role_user')->insert([
-            'user_id'    => $user->id,
-            'role_id'    => 1,
-            'created_at' => now(),
-            'updated_at' => null,
+        $this->call([
+            AdminUserSeeder::class,
         ]);
     }
 }

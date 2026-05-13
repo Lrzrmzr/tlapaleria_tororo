@@ -40,13 +40,14 @@ class AuthController extends Controller
             'message' => 'Login exitoso',
             'data' => [
                 'user' => [
-                    'id' => $user->id,
-                    'name' => $user->name,
-                    'email' => $user->email,
-                    'role' => $user->roles->first()?->name ?? null,
+                    'id'        => $user->id,
+                    'name'      => $user->name,
+                    'email'     => $user->email,
+                    'role'      => $user->roles->first()?->name ?? null,
+                    'roles'     => $user->roles->pluck('name')->toArray(),
                     'branch_id' => $user->branch_id,
-                    'branch' => $user->branch ? [
-                        'id' => $user->branch->id,
+                    'branch'    => $user->branch ? [
+                        'id'   => $user->branch->id,
                         'name' => $user->branch->name,
                         'code' => $user->branch->code,
                     ] : null,

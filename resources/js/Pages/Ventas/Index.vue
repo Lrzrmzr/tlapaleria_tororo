@@ -1,27 +1,56 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import { Head, Link, useForm } from '@inertiajs/vue3';
+import { Head, useForm, router } from '@inertiajs/vue3';
 import { ref, computed } from 'vue';
 
 const props = defineProps({
     ventas: Array,
     productos: Array,
     user: Object,
-    ventasLibresHabilitadas: Boolean
+    ventasLibresHabilitadas: Boolean,
+    filters: Object,
 });
+
+// Filtros
+const filterFechaDesde = ref(props.filters?.fecha_desde ?? '');
+const filterFechaHasta = ref(props.filters?.fecha_hasta ?? '');
+const filterSearch     = ref(props.filters?.search ?? '');
+
+function aplicarFiltros() {
+    router.get(route('ventas.index'), {
+        fecha_desde: filterFechaDesde.value,
+        fecha_hasta: filterFechaHasta.value,
+        search:      filterSearch.value,
+    }, { preserveState: true });
+}
+
+function limpiarFiltros() {
+    const hoy = new Date().toISOString().slice(0, 10);
+    filterFechaDesde.value = hoy;
+    filterFechaHasta.value = hoy;
+    filterSearch.value     = '';
+    router.get(route('ventas.index'));
+}
 
 // Tabs para ventas libres y catálogo
 const activeTab = ref('libre');
 
+// Genera un UUID v4 único para cada transacción (idempotencia)
+function newIdempotencyKey() {
+    return crypto.randomUUID();
+}
+
 // Form para venta libre
 const formLibre = useForm({
-    descripcion: '',
-    total: 0,
+    descripcion:      '',
+    total:            0,
+    idempotency_key:  newIdempotencyKey(),
 });
 
 // Form para venta de catálogo
 const formCatalogo = useForm({
-    items: [], // Array de { product_id, quantity, price }
+    items:            [], // Array de { product_id, quantity }
+    idempotency_key:  newIdempotencyKey(),
 });
 
 // Carrito de compras para venta de catálogo
@@ -38,6 +67,7 @@ function submitVentaLibre() {
     formLibre.post(route('ventas.store'), {
         onSuccess: () => {
             formLibre.reset();
+            formLibre.idempotency_key = newIdempotencyKey(); // nueva clave para la siguiente venta
             showModalLibre.value = false;
         },
     });
@@ -159,14 +189,14 @@ function submitVentaCatalogo() {
 
     formCatalogo.items = carritoItems.value.map(item => ({
         product_id: item.product_id,
-        quantity: item.quantity,
-        price: item.price,
-        subtotal: item.subtotal
+        quantity:   item.quantity,
+        // price y subtotal los calcula el servidor; se omiten para seguridad
     }));
 
     formCatalogo.post(route('ventas.store'), {
         onSuccess: () => {
             formCatalogo.reset();
+            formCatalogo.idempotency_key = newIdempotencyKey(); // nueva clave para la siguiente venta
             carritoItems.value = [];
             showModalCatalogo.value = false;
         },
@@ -227,7 +257,7 @@ function abrirModalCatalogo() {
                     <div class="bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 rounded-2xl p-6 shadow-lg">
                         <div class="flex items-center justify-between">
                             <div>
-                                <p class="text-sm font-medium text-green-600 dark:text-green-400 uppercase">Total Ventas Hoy</p>
+                                <p class="text-sm font-medium text-green-600 dark:text-green-400 uppercase">Total del Período</p>
                                 <p class="text-3xl font-bold text-gray-900 dark:text-white mt-2">
                                     {{ formatMoney(totalVentasDia) }}
                                 </p>
@@ -273,6 +303,52 @@ function abrirModalCatalogo() {
                     </div>
                 </div>
 
+                <!-- Filtros -->
+                <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6 mb-6">
+                    <div class="flex flex-wrap items-end gap-4">
+                        <div>
+                            <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Desde</label>
+                            <input
+                                v-model="filterFechaDesde"
+                                type="date"
+                                class="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                            />
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Hasta</label>
+                            <input
+                                v-model="filterFechaHasta"
+                                type="date"
+                                class="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                            />
+                        </div>
+                        <div class="flex-1 min-w-[200px]">
+                            <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Buscar cliente</label>
+                            <input
+                                v-model="filterSearch"
+                                type="text"
+                                placeholder="Nombre del cliente..."
+                                @keydown.enter="aplicarFiltros"
+                                class="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                            />
+                        </div>
+                        <div class="flex gap-2">
+                            <button
+                                @click="aplicarFiltros"
+                                class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors"
+                            >
+                                Buscar
+                            </button>
+                            <button
+                                @click="limpiarFiltros"
+                                class="bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 px-4 py-2 rounded-lg text-sm font-semibold transition-colors"
+                            >
+                                Hoy
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Tabla de Ventas -->
                 <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-lg overflow-hidden">
                     <div class="p-6 border-b border-gray-200 dark:border-gray-700">
@@ -280,7 +356,7 @@ function abrirModalCatalogo() {
                             <svg class="w-7 h-7 mr-2 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                             </svg>
-                            Ventas del Día
+                            Ventas
                         </h3>
                     </div>
 
@@ -289,7 +365,7 @@ function abrirModalCatalogo() {
                             <thead class="bg-gray-50 dark:bg-gray-700">
                                 <tr>
                                     <th class="px-6 py-4 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                                        Hora
+                                        Fecha/Hora
                                     </th>
                                     <th class="px-6 py-4 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                                         Cliente
@@ -314,15 +390,16 @@ function abrirModalCatalogo() {
                                         <svg class="w-16 h-16 mx-auto mb-4 text-gray-300 dark:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
                                         </svg>
-                                        <p class="text-lg font-medium">No hay ventas registradas hoy</p>
-                                        <p class="text-sm mt-1">Agrega tu primera venta usando los botones de arriba</p>
+                                        <p class="text-lg font-medium">No hay ventas en este período</p>
+                                        <p class="text-sm mt-1">Cambia el rango de fechas o registra una nueva venta</p>
                                     </td>
                                 </tr>
                                 <tr v-for="venta in ventas" :key="venta.id" class="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
                                     <td class="px-6 py-4 whitespace-nowrap">
-                                        <span class="text-sm font-medium text-gray-900 dark:text-white">
-                                            {{ venta.created_at }}
-                                        </span>
+                                        <div class="text-sm">
+                                            <div class="font-medium text-gray-900 dark:text-white">{{ venta.created_at }}</div>
+                                            <div class="text-gray-500 dark:text-gray-400">{{ venta.fecha }}</div>
+                                        </div>
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap">
                                         <span class="text-sm text-gray-900 dark:text-white">

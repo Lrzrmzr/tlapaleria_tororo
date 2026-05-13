@@ -10,7 +10,7 @@ class Faltante extends Model
 {
     use SoftDeletes, LogsActivity;
 
-    protected $fillable = ['descripcion', 'pedido', 'user_id', 'branch_id', 'confirmado'];
+    protected $fillable = ['descripcion', 'pedido', 'user_id', 'branch_id', 'confirmado', 'product_id', 'quantity', 'notes'];
 
     protected $casts = [
         'confirmado' => 'boolean',

@@ -52,6 +52,7 @@ class BranchController extends Controller
      */
     public function store(Request $request)
     {
+        $this->authorizeRoot();
         $validated = $request->validate([
             'name' => 'required|string|max:100',
             'code' => 'required|string|max:20|unique:branches,code',
@@ -84,6 +85,7 @@ class BranchController extends Controller
      */
     public function update(Request $request, $id)
     {
+        $this->authorizeRoot();
         $branch = Branch::findOrFail($id);
 
         $validated = $request->validate([
@@ -113,6 +115,7 @@ class BranchController extends Controller
      */
     public function destroy($id)
     {
+        $this->authorizeRoot();
         $branch = Branch::findOrFail($id);
 
         // No permitir eliminar la sucursal principal
@@ -151,6 +154,7 @@ class BranchController extends Controller
      */
     public function toggleStatus($id)
     {
+        $this->authorizeRoot();
         $branch = Branch::findOrFail($id);
 
         if ($branch->is_main && $branch->active) {
@@ -217,6 +221,14 @@ class BranchController extends Controller
             ],
             'inventory' => $inventory,
         ]);
+    }
+
+    private function authorizeRoot(): void
+    {
+        $user = \Illuminate\Support\Facades\Auth::user();
+        if (!$user || !$user->isRoot()) {
+            abort(403, 'Solo el administrador root puede gestionar sucursales.');
+        }
     }
 
     /**

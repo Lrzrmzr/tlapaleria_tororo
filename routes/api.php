@@ -21,13 +21,14 @@ use Illuminate\Support\Facades\Route;
 // ENDPOINTS PÚBLICOS (sin autenticación)
 // ========================================
 
-// Endpoint público para consulta de productos
-Route::get('/products', [PublicController::class, 'apiProducts']);
+// Endpoint público — throttle:60,1 = 60 req/min por IP para prevenir scraping
+Route::get('/products', [PublicController::class, 'apiProducts'])->middleware('throttle:60,1');
 
 // Autenticación - Login (con middleware web para crear sesión)
 // El middleware 'web' permite crear sesión para la app web
 // y también retorna token para la app móvil
-Route::middleware(['web'])->group(function () {
+// throttle:10,1 = máximo 10 intentos por minuto por IP
+Route::middleware(['web', 'throttle:10,1'])->group(function () {
     Route::post('/login', [AuthController::class, 'login']);
 });
 

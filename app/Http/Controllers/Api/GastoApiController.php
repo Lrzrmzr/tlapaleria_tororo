@@ -47,26 +47,34 @@ class GastoApiController extends Controller
      */
     public function store(Request $request)
     {
+        $user = $request->user();
+
         $validated = $request->validate([
             'descripcion' => 'required|string|max:255',
-            'total' => 'required|numeric|min:0',
+            'monto'       => 'required|numeric|min:0.01', // columna renombrada de 'total' a 'monto'
+            'branch_id'   => 'nullable|exists:branches,id',
         ]);
 
-        $validated['user_id'] = $request->user()->id;
+        // No root: usar la sucursal del usuario
+        if (!$user->isRoot() && $user->branch_id) {
+            $validated['branch_id'] = $user->branch_id;
+        }
+
+        $validated['user_id'] = $user->id;
 
         $gasto = Gasto::create($validated);
 
         return response()->json([
             'success' => true,
             'message' => 'Gasto registrado exitosamente',
-            'data' => $gasto->load('user')
+            'data'    => $gasto->load('user'),
         ], 201);
     }
 
     /**
      * Obtener un gasto específico
      */
-    public function show($id)
+    public function show(int $id)
     {
         $gasto = Gasto::with('user')->findOrFail($id);
 
@@ -79,13 +87,13 @@ class GastoApiController extends Controller
     /**
      * Actualizar un gasto
      */
-    public function update(Request $request, $id)
+    public function update(Request $request, int $id)
     {
         $gasto = Gasto::findOrFail($id);
 
         $validated = $request->validate([
             'descripcion' => 'sometimes|required|string|max:255',
-            'total' => 'sometimes|required|numeric|min:0',
+            'monto'       => 'sometimes|required|numeric|min:0.01',
         ]);
 
         $gasto->update($validated);
@@ -100,7 +108,7 @@ class GastoApiController extends Controller
     /**
      * Eliminar un gasto
      */
-    public function destroy($id)
+    public function destroy(int $id)
     {
         $user = request()->user();
         $userRole = $user->roles->first();

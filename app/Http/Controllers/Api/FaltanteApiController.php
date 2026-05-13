@@ -74,14 +74,12 @@ class FaltanteApiController extends Controller
     /**
      * Obtener un faltante específico
      */
-    public function show($id)
+    public function show(int $id, Request $request)
     {
         $faltante = Faltante::with(['user', 'branch'])->findOrFail($id);
+        $this->authorizeBranch($faltante->branch_id, $request->user());
 
-        return response()->json([
-            'success' => true,
-            'data' => $faltante
-        ]);
+        return response()->json(['success' => true, 'data' => $faltante]);
     }
 
     /**
@@ -90,12 +88,18 @@ class FaltanteApiController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'descripcion' => 'required|string',
-            'pedido' => 'required|string',
-            'branch_id' => 'required|exists:branches,id',
+            'descripcion' => 'required|string|max:255',
+            'pedido'      => 'required|in:GENERAL,TRUPER',
+            'branch_id'   => 'required|exists:branches,id',
         ]);
 
-        $validated['user_id'] = $request->user()->id;
+        // No root: forzar la sucursal del usuario
+        $user = $request->user();
+        if (!$user->isRoot() && $user->branch_id) {
+            $validated['branch_id'] = $user->branch_id;
+        }
+
+        $validated['user_id']   = $user->id;
         $validated['confirmado'] = false;
 
         $faltante = Faltante::create($validated);
@@ -103,21 +107,22 @@ class FaltanteApiController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Faltante registrado exitosamente',
-            'data' => $faltante->load(['user', 'branch'])
+            'data'    => $faltante->load(['user', 'branch']),
         ], 201);
     }
 
     /**
      * Actualizar un faltante
      */
-    public function update(Request $request, $id)
+    public function update(Request $request, int $id)
     {
         $faltante = Faltante::findOrFail($id);
+        $this->authorizeBranch($faltante->branch_id, $request->user());
 
         $validated = $request->validate([
-            'descripcion' => 'sometimes|string',
-            'pedido' => 'sometimes|string',
-            'confirmado' => 'sometimes|boolean',
+            'descripcion' => 'sometimes|string|max:255',
+            'pedido'      => 'sometimes|in:GENERAL,TRUPER',
+            'confirmado'  => 'sometimes|boolean',
         ]);
 
         $faltante->update($validated);
@@ -125,49 +130,52 @@ class FaltanteApiController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Faltante actualizado exitosamente',
-            'data' => $faltante->load(['user', 'branch'])
+            'data'    => $faltante->load(['user', 'branch']),
         ]);
     }
 
     /**
      * Marcar faltante como completado (confirmado)
      */
-    public function markAsCompleted($id)
+    public function markAsCompleted(int $id, Request $request)
     {
         $faltante = Faltante::findOrFail($id);
+        $this->authorizeBranch($faltante->branch_id, $request->user());
 
-        $faltante->update([
-            'confirmado' => true,
-        ]);
+        $faltante->update(['confirmado' => true]);
 
         return response()->json([
             'success' => true,
             'message' => 'Faltante marcado como completado',
-            'data' => $faltante->load(['user', 'branch'])
+            'data'    => $faltante->load(['user', 'branch']),
         ]);
     }
 
     /**
      * Eliminar un faltante
      */
-    public function destroy($id)
+    public function destroy(int $id, Request $request)
     {
-        $user = request()->user();
+        $user     = $request->user();
         $userRole = $user->roles->first();
 
-        if (!$userRole || ($userRole->name !== 'administrador' && $userRole->name !== 'root')) {
-            return response()->json([
-                'success' => false,
-                'message' => 'No tienes permisos para eliminar faltantes'
-            ], 403);
+        if (!$userRole || !in_array($userRole->name, ['administrador', 'root'])) {
+            return response()->json(['success' => false, 'message' => 'No tienes permisos para eliminar faltantes.'], 403);
         }
 
         $faltante = Faltante::findOrFail($id);
+        $this->authorizeBranch($faltante->branch_id, $user);
+
         $faltante->delete();
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Faltante eliminado exitosamente'
-        ]);
+        return response()->json(['success' => true, 'message' => 'Faltante eliminado exitosamente']);
+    }
+
+    private function authorizeBranch(?int $branchId, \App\Models\User $user): void
+    {
+        if ($user->isRoot()) return;
+        if ($branchId !== $user->branch_id) {
+            abort(403, 'No tienes acceso a datos de otra sucursal.');
+        }
     }
 }

@@ -1,7 +1,6 @@
 <?php
 
 use App\Http\Controllers\ProfileController;
-use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -101,6 +100,38 @@ Route::middleware(['auth', 'check.branch'])->group(function () {
     // Auditoría (Activity Logs)
     Route::get('/auditoria', [\App\Http\Controllers\AuditController::class, 'index'])->name('auditoria.index');
     Route::get('/auditoria/{id}', [\App\Http\Controllers\AuditController::class, 'show'])->name('auditoria.show');
+});
+
+// Asistente IA — throttle:30,1 = 30 consultas/minuto por usuario para controlar costos de API
+Route::middleware(['auth', 'check.branch', 'throttle:30,1'])->group(function () {
+    Route::post('/asistente', [\App\Http\Controllers\AsistenteController::class, 'consulta'])->name('asistente.consulta');
+});
+
+// Reportes & Corte de Caja
+Route::middleware(['auth', 'check.branch'])->group(function () {
+    Route::get('/reportes',     [\App\Http\Controllers\ReporteController::class, 'index'])->name('reportes.index');
+    Route::get('/reportes/pdf', [\App\Http\Controllers\ReporteController::class, 'exportPdf'])->name('reportes.pdf');
+    Route::get('/reportes/csv', [\App\Http\Controllers\ReporteController::class, 'exportCsv'])->name('reportes.csv');
+});
+
+// Cuentas por Pagar
+Route::middleware(['auth', 'check.branch'])->group(function () {
+    Route::get('/cuentas-por-pagar', [\App\Http\Controllers\CuentaPorPagarController::class, 'index'])->name('cuentas-por-pagar.index');
+    Route::post('/cuentas-por-pagar', [\App\Http\Controllers\CuentaPorPagarController::class, 'store'])->name('cuentas-por-pagar.store');
+    Route::put('/cuentas-por-pagar/{cuentaPorPagar}', [\App\Http\Controllers\CuentaPorPagarController::class, 'update'])->name('cuentas-por-pagar.update');
+    Route::delete('/cuentas-por-pagar/{cuentaPorPagar}', [\App\Http\Controllers\CuentaPorPagarController::class, 'destroy'])->name('cuentas-por-pagar.destroy');
+    Route::post('/cuentas-por-pagar/{cuentaPorPagar}/pagos', [\App\Http\Controllers\CuentaPorPagarController::class, 'storePago'])->name('cuentas-por-pagar.pagos.store');
+    Route::delete('/cuentas-por-pagar/pagos/{pago}', [\App\Http\Controllers\CuentaPorPagarController::class, 'destroyPago'])->name('cuentas-por-pagar.pagos.destroy');
+});
+
+// Cuentas por Cobrar
+Route::middleware(['auth', 'check.branch'])->group(function () {
+    Route::get('/cuentas-por-cobrar', [\App\Http\Controllers\CuentaPorCobrarController::class, 'index'])->name('cuentas-por-cobrar.index');
+    Route::post('/cuentas-por-cobrar', [\App\Http\Controllers\CuentaPorCobrarController::class, 'store'])->name('cuentas-por-cobrar.store');
+    Route::put('/cuentas-por-cobrar/{cuentaPorCobrar}', [\App\Http\Controllers\CuentaPorCobrarController::class, 'update'])->name('cuentas-por-cobrar.update');
+    Route::delete('/cuentas-por-cobrar/{cuentaPorCobrar}', [\App\Http\Controllers\CuentaPorCobrarController::class, 'destroy'])->name('cuentas-por-cobrar.destroy');
+    Route::post('/cuentas-por-cobrar/{cuentaPorCobrar}/cobros', [\App\Http\Controllers\CuentaPorCobrarController::class, 'storeCobro'])->name('cuentas-por-cobrar.cobros.store');
+    Route::delete('/cuentas-por-cobrar/cobros/{cobro}', [\App\Http\Controllers\CuentaPorCobrarController::class, 'destroyCobro'])->name('cuentas-por-cobrar.cobros.destroy');
 });
 
 require __DIR__.'/auth.php';

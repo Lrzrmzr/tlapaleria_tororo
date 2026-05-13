@@ -21,6 +21,11 @@ class Customer extends Model
         return $this->hasMany(Sale::class);
     }
 
+    public function cuentasPorCobrar(): HasMany
+    {
+        return $this->hasMany(CuentaPorCobrar::class);
+    }
+
     /**
      * Obtiene el total de clientes activos
      */
