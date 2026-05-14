@@ -13,6 +13,11 @@ class AuditController extends Controller
      */
     public function index(Request $request)
     {
+        $currentUser = $request->user();
+        if (!$currentUser || (!$currentUser->isRoot() && !$currentUser->isBranchAdmin())) {
+            abort(403, 'Solo administradores pueden ver la auditoría.');
+        }
+
         $query = Activity::with(['causer', 'subject'])
             ->latest();
 
@@ -62,8 +67,8 @@ class AuditController extends Controller
             });
         }
 
-        // Paginación: por defecto 10 registros (últimos cambios)
-        $perPage = $request->get('per_page', 10);
+        // Paginación: por defecto 10, máximo 100
+        $perPage = min((int) $request->get('per_page', 10), 100);
         $activities = $query->paginate($perPage)->through(function ($activity) {
             return [
                 'id' => $activity->id,
@@ -160,8 +165,13 @@ class AuditController extends Controller
     /**
      * Muestra los detalles de un log específico
      */
-    public function show($id)
+    public function show(Request $request, $id)
     {
+        $currentUser = $request->user();
+        if (!$currentUser || !$currentUser->isRoot()) {
+            abort(403, 'Solo el administrador root puede ver detalles de auditoría.');
+        }
+
         $activity = Activity::with(['causer', 'subject'])->findOrFail($id);
 
         return Inertia::render('Auditoria/Show', [

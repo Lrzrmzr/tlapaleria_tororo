@@ -125,6 +125,28 @@ class AsistenteController extends Controller
             ]);
         }
 
+        // ── 3b. Forzar filtro de sucursal para usuarios no-root ───────────────
+        // Las tablas con branch_id que deben estar filtradas
+        $branchTables = ['sales', 'gastos', 'branch_inventory', 'cuentas_por_cobrar', 'cuentas_por_pagar'];
+        if (!$isRoot && $branchId) {
+            preg_match_all('/\b(?:FROM|JOIN)\s+([a-z_][a-z0-9_]*)/i', $sql, $tableMatches);
+            $usedTables = array_map('strtolower', $tableMatches[1] ?? []);
+            $usesBranchTable = !empty(array_intersect($usedTables, $branchTables));
+
+            if ($usesBranchTable) {
+                $sqlLower = strtolower($sql);
+                if (!preg_match('/branch_id\s*=\s*' . preg_quote((string) $branchId, '/') . '/', $sqlLower)) {
+                    Log::warning('Asistente SQL sin filtro de sucursal', ['sql' => $sql, 'branch_id' => $branchId]);
+                    // Inyectar el filtro en vez de rechazar, para no bloquear preguntas legítimas
+                    $sql = rtrim(rtrim($sql), ';');
+                    $hasWhere = preg_match('/\bWHERE\b/i', $sql);
+                    $sql .= $hasWhere
+                        ? " AND branch_id = {$branchId}"
+                        : " WHERE branch_id = {$branchId}";
+                }
+            }
+        }
+
         // ── 4. Ejecutar SQL ───────────────────────────────────────────────────
         try {
             $rows     = DB::select($sql);

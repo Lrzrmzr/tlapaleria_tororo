@@ -7,7 +7,7 @@ const PRECIO   = '125.50';
 const PRECIO_ED = '199.00';
 const BARCODE  = `TEST${ts}`;
 
-test.describe('Productos', () => {
+test.describe.serial('Productos', () => {
 
   test.beforeEach(async ({ page }) => {
     await page.goto('/productos');
@@ -91,7 +91,11 @@ test.describe('Productos', () => {
     await modal.getByRole('button', { name: 'Actualizar' }).click();
 
     await expect(modal).not.toBeVisible({ timeout: 8_000 });
-    await expect(page.getByRole('cell', { name: NOMBRE_ED })).toBeVisible();
+
+    // El filtro de búsqueda sigue con NOMBRE; hay que buscar NOMBRE_ED para verlo
+    await page.getByPlaceholder('Nombre, código de barras o descripción...').fill(NOMBRE_ED);
+    await page.waitForLoadState('networkidle');
+    await expect(page.getByRole('cell', { name: NOMBRE_ED })).toBeVisible({ timeout: 5_000 });
   });
 
   // ─── PRECIO VISIBLE EN TABLA ──────────────────────────────────────────────

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Supplier;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
 
 class SupplierController extends Controller
@@ -37,6 +38,8 @@ class SupplierController extends Controller
 
     public function store(Request $request)
     {
+        $this->authorizeAdminOrRoot();
+
         $request->validate([
             'name' => 'required|string|max:255',
             'contact_name' => 'nullable|string|max:255',
@@ -58,6 +61,8 @@ class SupplierController extends Controller
 
     public function update(Request $request, Supplier $proveedor)
     {
+        $this->authorizeAdminOrRoot();
+
         $request->validate([
             'name' => 'required|string|max:255',
             'contact_name' => 'nullable|string|max:255',
@@ -79,6 +84,8 @@ class SupplierController extends Controller
 
     public function destroy(Supplier $proveedor)
     {
+        $this->authorizeAdminOrRoot();
+
         // Verificar si tiene productos asignados
         if ($proveedor->productsSupplied()->exists()) {
             return redirect()->back()->withErrors(['error' => 'No se puede eliminar un proveedor que tiene productos asignados.']);
@@ -86,5 +93,13 @@ class SupplierController extends Controller
 
         $proveedor->delete();
         return redirect()->back()->with('success', 'Proveedor eliminado exitosamente');
+    }
+
+    private function authorizeAdminOrRoot(): void
+    {
+        $user = Auth::user();
+        if (!$user || (!$user->isRoot() && !$user->isBranchAdmin())) {
+            abort(403, 'Solo administradores pueden gestionar proveedores.');
+        }
     }
 }

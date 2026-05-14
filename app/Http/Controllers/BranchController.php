@@ -142,6 +142,7 @@ class BranchController extends Controller
      */
     public function restore($id)
     {
+        $this->authorizeRoot();
         $branch = Branch::withTrashed()->findOrFail($id);
         $branch->restore();
         $branch->update(['active' => true]);
@@ -191,8 +192,13 @@ class BranchController extends Controller
     /**
      * Get branch inventory
      */
-    public function inventory($id)
+    public function inventory($id, \Illuminate\Http\Request $request)
     {
+        $user = \Illuminate\Support\Facades\Auth::user();
+        if (!$user->isRoot() && (int) $id !== (int) $user->branch_id) {
+            abort(403, 'Solo puedes consultar el inventario de tu propia sucursal.');
+        }
+
         $branch = Branch::findOrFail($id);
 
         $inventory = $branch->inventory()
@@ -236,6 +242,11 @@ class BranchController extends Controller
      */
     public function statistics($id)
     {
+        $user = \Illuminate\Support\Facades\Auth::user();
+        if (!$user->isRoot() && (int) $id !== (int) $user->branch_id) {
+            abort(403, 'Solo puedes consultar estadísticas de tu propia sucursal.');
+        }
+
         $branch = Branch::withCount(['users', 'inventory', 'sales', 'purchases'])
             ->findOrFail($id);
 

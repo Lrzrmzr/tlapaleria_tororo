@@ -21,6 +21,7 @@ use App\Http\Controllers\FaltanteController;
 // Usuarios - Requiere validación de sucursal
 Route::middleware(['auth', 'check.branch'])->group(function () {
     Route::get('/usuarios', [\App\Http\Controllers\UsuarioController::class, 'index'])->name('usuarios.index');
+    Route::post('/usuarios/crear', [\App\Http\Controllers\UsuarioController::class, 'store'])->name('usuarios.store');
     Route::post('/usuarios/asignar-rol', [\App\Http\Controllers\UsuarioController::class, 'asignarRol'])->name('usuarios.asignarRol');
     Route::post('/usuarios/{user}/asignar-sucursal', [\App\Http\Controllers\UsuarioController::class, 'asignarSucursal'])->name('usuarios.asignarSucursal');
 });

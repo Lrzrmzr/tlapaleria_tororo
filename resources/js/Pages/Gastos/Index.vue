@@ -12,12 +12,12 @@ const mostrarFormulario = ref(false);
 
 const form = useForm({
     descripcion: '',
-    total: 0,
+    monto: 0,
 });
 
 // Calcular total de gastos
 const totalGastos = computed(() => {
-    return props.gastos.reduce((sum, gasto) => sum + parseFloat(gasto.total || 0), 0);
+    return props.gastos.reduce((sum, gasto) => sum + parseFloat(gasto.monto || 0), 0);
 });
 
 function submit() {
@@ -133,7 +133,7 @@ function formatCurrency(value) {
                                     Total
                                 </label>
                                 <input
-                                    v-model="form.total"
+                                    v-model="form.monto"
                                     type="number"
                                     step="0.01"
                                     min="0"
@@ -141,8 +141,8 @@ function formatCurrency(value) {
                                     required
                                     placeholder="0.00"
                                 />
-                                <div v-if="form.errors.total" class="text-sm text-red-600 mt-1">
-                                    {{ form.errors.total }}
+                                <div v-if="form.errors.monto" class="text-sm text-red-600 mt-1">
+                                    {{ form.errors.monto }}
                                 </div>
                             </div>
                         </div>
@@ -207,7 +207,7 @@ function formatCurrency(value) {
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap">
                                     <div class="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                                        {{ formatCurrency(gasto.total) }}
+                                        {{ formatCurrency(gasto.monto) }}
                                     </div>
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap">

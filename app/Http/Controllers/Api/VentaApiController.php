@@ -58,9 +58,17 @@ class VentaApiController extends Controller
     /**
      * Obtener una venta específica
      */
-    public function show(int $id)
+    public function show(Request $request, int $id)
     {
         $venta = Venta::with(['user', 'branch', 'items.product'])->findOrFail($id);
+
+        $user = $request->user();
+        if (!$user->isRoot() && $venta->branch_id !== $user->branch_id) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No tienes acceso a ventas de otra sucursal.'
+            ], 403);
+        }
 
         return response()->json([
             'success' => true,
@@ -196,6 +204,14 @@ class VentaApiController extends Controller
         DB::beginTransaction();
         try {
             $venta = Venta::with('items')->findOrFail($id);
+
+            if (!$user->isRoot() && $venta->branch_id !== $user->branch_id) {
+                DB::rollBack();
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No tienes acceso a ventas de otra sucursal.'
+                ], 403);
+            }
 
             // Restaurar el stock
             foreach ($venta->items as $item) {

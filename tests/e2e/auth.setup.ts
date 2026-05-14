@@ -20,9 +20,9 @@ setup('autenticar como admin', async ({ page }) => {
   await page.fill('#password', 'pasword123');
   await page.getByRole('button', { name: /iniciar sesión/i }).click();
 
-  // El login hace window.location.href = '/dashboard'
-  await page.waitForURL('**/dashboard', { timeout: 10_000 });
-  await expect(page).toHaveURL('/dashboard');
+  // Esperamos la URL + un elemento del dashboard; networkidle falla con Inertia/Vite HMR
+  await page.waitForURL('**/dashboard', { timeout: 20_000 });
+  await expect(page.getByRole('heading', { name: /Bienvenido/i })).toBeVisible({ timeout: 10_000 });
 
   // Guardar sesión completa (cookies + localStorage con el access_token)
   await page.context().storageState({ path: authFile });

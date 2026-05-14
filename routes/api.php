@@ -98,43 +98,7 @@ Route::middleware(['auth:api'])->group(function () {
     // ENDPOINTS ADMINISTRATIVOS (solo root, administradores y trabajadores)
     // ========================================
 
-    Route::middleware(['role:root,administrador,trabajador'])->group(function () {
-
-        // Categorías
-        Route::apiResource('admin/categories', CategoryController::class);
-        Route::get('admin/categories-active', [CategoryController::class, 'active']); // Categorías activas (para selectores)
-        Route::post('admin/categories/reorder', [CategoryController::class, 'reorder']); // Reordenar
-
-        // Productos
-        Route::apiResource('admin/products', ProductController::class);
-
-        // Gestión de categorías de productos
-        Route::post('admin/products/{id}/categories/sync', [ProductController::class, 'syncCategories']); // Sincronizar todas
-        Route::post('admin/products/{id}/categories', [ProductController::class, 'attachCategory']); // Agregar una
-        Route::delete('admin/products/{product}/categories/{category}', [ProductController::class, 'detachCategory']); // Quitar una
-        Route::get('admin/products/{id}/categories', [ProductController::class, 'getCategories']); // Obtener todas
-
-        // Proveedores
-        Route::apiResource('admin/suppliers', SupplierController::class);
-
-        // Inventario
-        Route::get('admin/inventory', [InventarioController::class, 'index']);
-        Route::post('admin/inventory', [InventarioController::class, 'store']);
-        Route::get('admin/inventory/{id}', [InventarioController::class, 'show']);
-        Route::put('admin/inventory/{id}', [InventarioController::class, 'update']);
-        Route::delete('admin/inventory/{id}', [InventarioController::class, 'destroy']);
-
-        // Ventas
-        Route::get('admin/ventas', [VentaController::class, 'index']);
-        Route::post('admin/ventas', [VentaController::class, 'store']);
-        Route::get('admin/ventas/{id}', [VentaController::class, 'show']);
-        Route::delete('admin/ventas/{id}', [VentaController::class, 'destroy']);
-
-        // Faltantes
-        Route::get('admin/faltantes', [FaltanteController::class, 'index']);
-        Route::post('admin/faltantes', [FaltanteController::class, 'store']);
-        Route::get('admin/faltantes/{id}', [FaltanteController::class, 'show']);
-        Route::put('admin/faltantes/{id}', [FaltanteController::class, 'update']);
-        Route::delete('admin/faltantes/{id}', [FaltanteController::class, 'destroy']);
-    });
+    // Rutas admin/* eliminadas: usaban controladores web (Inertia) que dependen del
+    // middleware check.branch no disponible en contexto API, lo que causaba branch_id=null
+    // en escrituras y filtraciones de datos entre sucursales. Usar los endpoints mobile/* equivalentes.
 });

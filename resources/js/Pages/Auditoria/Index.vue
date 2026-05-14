@@ -340,23 +340,31 @@ const formatearCambios = (properties) => {
                         </div>
 
                         <div class="flex items-center gap-2">
-                            <Link
-                                v-for="link in activities.links"
-                                :key="link.label"
-                                :href="link.url"
-                                :class="[
-                                    'px-4 py-2 text-sm font-medium rounded-lg transition-colors',
-                                    link.active
-                                        ? 'bg-gradient-to-r from-purple-600 to-purple-700 text-white'
-                                        : link.url
-                                        ? 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-300'
-                                        : 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                                ]"
-                                :disabled="!link.url"
-                                preserve-state
-                                preserve-scroll
-                                v-html="link.label"
-                            />
+                            <template v-for="link in activities.links" :key="link.label">
+                                <Link
+                                    v-if="link.url"
+                                    :href="link.url"
+                                    :class="[
+                                        'px-4 py-2 text-sm font-medium rounded-lg transition-colors',
+                                        link.active
+                                            ? 'bg-gradient-to-r from-purple-600 to-purple-700 text-white'
+                                            : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-300'
+                                    ]"
+                                    preserve-state
+                                    preserve-scroll
+                                    v-html="link.label"
+                                />
+                                <span
+                                    v-else
+                                    :class="[
+                                        'px-4 py-2 text-sm font-medium rounded-lg',
+                                        link.active
+                                            ? 'bg-gradient-to-r from-purple-600 to-purple-700 text-white'
+                                            : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                    ]"
+                                    v-html="link.label"
+                                />
+                            </template>
                         </div>
                     </div>
 

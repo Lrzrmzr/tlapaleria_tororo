@@ -65,10 +65,18 @@ class InventarioApiController extends Controller
     /**
      * Obtener inventario de un producto específico
      */
-    public function show(int $id)
+    public function show(Request $request, int $id)
     {
         $inventario = BranchInventory::with(['product.supplier', 'branch'])
             ->findOrFail($id);
+
+        $user = $request->user();
+        if (!$user->isRoot() && $inventario->branch_id !== $user->branch_id) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No tienes acceso al inventario de otra sucursal.'
+            ], 403);
+        }
 
         return response()->json([
             'success' => true,
@@ -87,6 +95,15 @@ class InventarioApiController extends Controller
         ]);
 
         $inventario = BranchInventory::findOrFail($id);
+
+        $user = $request->user();
+        if (!$user->isRoot() && $inventario->branch_id !== $user->branch_id) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No tienes acceso al inventario de otra sucursal.'
+            ], 403);
+        }
+
         $oldStock = $inventario->stock;
         $inventario->stock += $validated['adjustment'];
 
@@ -116,6 +133,8 @@ class InventarioApiController extends Controller
      */
     public function store(Request $request)
     {
+        $user = $request->user();
+
         $validated = $request->validate([
             'product_id' => 'required|exists:products,id',
             'branch_id' => 'required|exists:branches,id',
@@ -123,6 +142,14 @@ class InventarioApiController extends Controller
             'min_stock' => 'nullable|integer|min:0',
             'max_stock' => 'nullable|integer|min:0',
         ]);
+
+        // Non-root users can only create inventory for their own branch
+        if (!$user->isRoot() && (int) $validated['branch_id'] !== (int) $user->branch_id) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Solo puedes crear inventario para tu propia sucursal.'
+            ], 403);
+        }
 
         // Verificar que no exista ya
         $exists = BranchInventory::where('product_id', $validated['product_id'])
@@ -151,7 +178,13 @@ class InventarioApiController extends Controller
     public function productosSinInventario(Request $request)
     {
         $user = $request->user();
-        $branchId = $request->get('branch_id', $user->branch_id);
+
+        // Root puede consultar cualquier sucursal; no-root solo la suya
+        if ($user->isRoot()) {
+            $branchId = $request->get('branch_id');
+        } else {
+            $branchId = $user->branch_id;
+        }
 
         if (!$branchId) {
             return response()->json([

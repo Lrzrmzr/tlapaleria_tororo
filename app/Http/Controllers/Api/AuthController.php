@@ -29,6 +29,14 @@ class AuthController extends Controller
 
         $user = Auth::user();
 
+        if (!$user->active) {
+            Auth::logout();
+            return response()->json([
+                'success' => false,
+                'message' => 'Esta cuenta ha sido desactivada. Contacta al administrador.'
+            ], 403);
+        }
+
         // Regenerar sesión para seguridad
         $request->session()->regenerate();
 
@@ -74,6 +82,52 @@ class AuthController extends Controller
                 'branch_id' => $user->branch_id,
                 'branch' => $user->branch ? [
                     'id' => $user->branch->id,
+                    'name' => $user->branch->name,
+                    'code' => $user->branch->code,
+                ] : null,
+            ]
+        ]);
+    }
+
+    /**
+     * Revocar todos los tokens del usuario (logout en todos los dispositivos)
+     */
+    public function logoutAll(Request $request)
+    {
+        $user = $request->user();
+
+        if ($user && method_exists($user, 'tokens')) {
+            $user->tokens()->delete();
+        }
+
+        Auth::guard('web')->logout();
+        $request->session()->invalidate();
+        $request->session()->regenerateToken();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Sesión cerrada en todos los dispositivos.'
+        ]);
+    }
+
+    /**
+     * Refrescar información del usuario autenticado
+     */
+    public function refresh(Request $request)
+    {
+        $user = $request->user();
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'id'        => $user->id,
+                'name'      => $user->name,
+                'email'     => $user->email,
+                'role'      => $user->roles->first()?->name ?? null,
+                'branch_id' => $user->branch_id,
+                'active'    => $user->active,
+                'branch'    => $user->branch ? [
+                    'id'   => $user->branch->id,
                     'name' => $user->branch->name,
                     'code' => $user->branch->code,
                 ] : null,

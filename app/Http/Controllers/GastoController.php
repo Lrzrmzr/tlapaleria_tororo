@@ -18,8 +18,8 @@ class GastoController extends Controller
         }
 
         $gastos = $query->latest()
-            ->paginate(50)
-            ->through(fn($gasto) => [
+            ->get()
+            ->map(fn($gasto) => [
                 'id'          => $gasto->id,
                 'descripcion' => $gasto->descripcion,
                 'monto'       => $gasto->monto,
@@ -28,7 +28,7 @@ class GastoController extends Controller
                     'id'   => $gasto->user->id,
                     'name' => $gasto->user->name,
                 ] : null,
-            ]);
+            ])->values();
 
         $user = Auth::user();
 

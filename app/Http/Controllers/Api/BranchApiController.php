@@ -53,8 +53,16 @@ class BranchApiController extends Controller
     /**
      * Obtener estadísticas de una sucursal
      */
-    public function stats($id)
+    public function stats($id, Request $request)
     {
+        $user = $request->user();
+        if (!$user->isRoot() && (int) $id !== (int) $user->branch_id) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Solo puedes consultar estadísticas de tu propia sucursal.'
+            ], 403);
+        }
+
         $branch = Branch::findOrFail($id);
 
         // Contar inventarios

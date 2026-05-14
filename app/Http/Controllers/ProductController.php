@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Product;
 use App\Models\Supplier;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
 
 class ProductController extends Controller
@@ -165,6 +166,8 @@ class ProductController extends Controller
 
     public function store(Request $request)
     {
+        $this->authorizeAdminOrRoot();
+
         $request->validate([
             'name' => 'required|string|max:255',
             'description' => 'nullable|string|max:1000',
@@ -223,6 +226,8 @@ class ProductController extends Controller
 
     public function update(Request $request, Product $producto)
     {
+        $this->authorizeAdminOrRoot();
+
         $request->validate([
             'name' => 'required|string|max:255',
             'description' => 'nullable|string|max:1000',
@@ -283,6 +288,8 @@ class ProductController extends Controller
 
     public function destroy(Product $producto)
     {
+        $this->authorizeAdminOrRoot();
+
         // Verificar si el producto tiene inventario
         if ($producto->branchInventory()->exists()) {
             return redirect()->back()->withErrors(['error' => 'No se puede eliminar un producto con inventario. Elimina primero el inventario.']);
@@ -302,6 +309,8 @@ class ProductController extends Controller
      */
     public function attachSupplier(Request $request, Product $producto)
     {
+        $this->authorizeAdminOrRoot();
+
         $request->validate([
             'supplier_id' => 'required|exists:suppliers,id',
             'cost' => 'required|numeric|min:0',
@@ -339,6 +348,8 @@ class ProductController extends Controller
      */
     public function updateSupplier(Request $request, Product $producto, Supplier $supplier)
     {
+        $this->authorizeAdminOrRoot();
+
         $request->validate([
             'cost' => 'required|numeric|min:0',
             'supplier_code' => 'nullable|string|max:255',
@@ -369,6 +380,8 @@ class ProductController extends Controller
      */
     public function detachSupplier(Product $producto, Supplier $supplier)
     {
+        $this->authorizeAdminOrRoot();
+
         $producto->suppliers()->detach($supplier->id);
         return redirect()->back()->with('success', 'Proveedor eliminado exitosamente');
     }
@@ -501,5 +514,13 @@ class ProductController extends Controller
         $product = Product::with('categories')->findOrFail($id);
 
         return response()->json($product->categories);
+    }
+
+    private function authorizeAdminOrRoot(): void
+    {
+        $user = Auth::user();
+        if (!$user || (!$user->isRoot() && !$user->isBranchAdmin())) {
+            abort(403, 'Solo administradores pueden gestionar el catálogo de productos.');
+        }
     }
 }

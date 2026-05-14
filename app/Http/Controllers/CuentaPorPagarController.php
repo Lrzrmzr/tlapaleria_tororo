@@ -33,7 +33,7 @@ class CuentaPorPagarController extends Controller
         if ($request->filled('fecha_desde')) $query->where('fecha_nota', '>=', $request->fecha_desde);
         if ($request->filled('fecha_hasta')) $query->where('fecha_nota', '<=', $request->fecha_hasta);
 
-        $cuentas = $query->latest()->paginate(50)->through(fn($c) => $this->formatCuenta($c));
+        $cuentas = $query->latest()->get()->map(fn($c) => $this->formatCuenta($c))->values();
 
         $statsQuery = CuentaPorPagar::query();
         if (!$isRoot) $statsQuery->where('branch_id', $userBranchId);

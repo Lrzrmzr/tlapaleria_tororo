@@ -12,6 +12,11 @@ class UsuarioController extends Controller
 {
     public function index()
     {
+        $currentUser = User::with('roles')->find(Auth::id());
+        if (!$currentUser->isRoot() && !$currentUser->isBranchAdmin()) {
+            abort(403, 'Solo administradores pueden gestionar usuarios.');
+        }
+
         $usuarios = User::with(['roles', 'branch'])->get()->map(function ($usuario) {
             $primerRol = $usuario->roles->first();
             return [
@@ -64,6 +69,50 @@ class UsuarioController extends Controller
                 'verificados' => $usuariosVerificados,
             ]
         ]);
+    }
+
+    public function store(Request $request)
+    {
+        $currentUser = User::with('roles')->find(Auth::id());
+
+        if (!$currentUser->isRoot() && !$currentUser->isBranchAdmin()) {
+            abort(403, 'Solo administradores pueden crear usuarios.');
+        }
+
+        $validated = $request->validate([
+            'name'                  => 'required|string|max:255',
+            'email'                 => 'required|email|max:255|unique:users,email',
+            'password'              => 'required|string|min:8|confirmed',
+            'rol_id'                => 'nullable|exists:roles,id',
+            'branch_id'             => 'nullable|exists:branches,id',
+        ]);
+
+        $rolRoot = Role::where('name', 'root')->first();
+        if (!empty($validated['rol_id']) && $rolRoot && (int) $validated['rol_id'] === $rolRoot->id && !$currentUser->isRoot()) {
+            abort(403, 'No puedes asignar el rol root.');
+        }
+
+        // Branch admins can only create users for their own branch
+        if ($currentUser->isBranchAdmin() && !$currentUser->isRoot()) {
+            $validated['branch_id'] = $currentUser->branch_id;
+        }
+
+        $user = User::create([
+            'name'      => $validated['name'],
+            'email'     => $validated['email'],
+            'password'  => bcrypt($validated['password']),
+            'branch_id' => $validated['branch_id'] ?? null,
+            'active'    => true,
+        ]);
+
+        $user->email_verified_at = now();
+        $user->save();
+
+        if (!empty($validated['rol_id'])) {
+            $user->roles()->attach((int) $validated['rol_id']);
+        }
+
+        return redirect()->back()->with('success', 'Usuario creado exitosamente.');
     }
 
     public function asignarRol(Request $request)

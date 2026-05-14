@@ -13,7 +13,15 @@ class GastoApiController extends Controller
      */
     public function index(Request $request)
     {
+        $user = $request->user();
         $query = Gasto::with('user')->latest();
+
+        // Filtrar por sucursal del usuario si no es root
+        if (!$user->isRoot() && $user->branch_id) {
+            $query->where('branch_id', $user->branch_id);
+        } elseif ($request->filled('branch_id')) {
+            $query->where('branch_id', $request->branch_id);
+        }
 
         // Filtro por fecha
         if ($request->filled('date_from')) {
@@ -24,7 +32,7 @@ class GastoApiController extends Controller
             $query->whereDate('created_at', '<=', $request->date_to);
         }
 
-        $perPage = $request->get('per_page', 50);
+        $perPage = min((int) $request->get('per_page', 50), 200);
         $gastos = $query->paginate($perPage);
 
         return response()->json([
@@ -74,9 +82,10 @@ class GastoApiController extends Controller
     /**
      * Obtener un gasto específico
      */
-    public function show(int $id)
+    public function show(int $id, Request $request)
     {
         $gasto = Gasto::with('user')->findOrFail($id);
+        $this->authorizeBranch($gasto->branch_id, $request->user());
 
         return response()->json([
             'success' => true,
@@ -90,6 +99,7 @@ class GastoApiController extends Controller
     public function update(Request $request, int $id)
     {
         $gasto = Gasto::findOrFail($id);
+        $this->authorizeBranch($gasto->branch_id, $request->user());
 
         $validated = $request->validate([
             'descripcion' => 'sometimes|required|string|max:255',
@@ -108,9 +118,9 @@ class GastoApiController extends Controller
     /**
      * Eliminar un gasto
      */
-    public function destroy(int $id)
+    public function destroy(Request $request, int $id)
     {
-        $user = request()->user();
+        $user = $request->user();
         $userRole = $user->roles->first();
 
         if (!$userRole || ($userRole->name !== 'administrador' && $userRole->name !== 'root')) {
@@ -121,11 +131,20 @@ class GastoApiController extends Controller
         }
 
         $gasto = Gasto::findOrFail($id);
+        $this->authorizeBranch($gasto->branch_id, $user);
         $gasto->delete();
 
         return response()->json([
             'success' => true,
             'message' => 'Gasto eliminado exitosamente'
         ]);
+    }
+
+    private function authorizeBranch(?int $branchId, \App\Models\User $user): void
+    {
+        if ($user->isRoot()) return;
+        if ($branchId !== $user->branch_id) {
+            abort(response()->json(['success' => false, 'message' => 'No tienes acceso a datos de otra sucursal.'], 403));
+        }
     }
 }

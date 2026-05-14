@@ -46,7 +46,7 @@ class FaltanteApiController extends Controller
             $query->whereDate('created_at', '<=', $request->date_to);
         }
 
-        $perPage = $request->get('per_page', 50);
+        $perPage = min(max((int) $request->get('per_page', 50), 1), 200);
         $faltantes = $query->paginate($perPage);
 
         // Contar pendientes (no confirmados)

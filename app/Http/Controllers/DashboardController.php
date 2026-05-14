@@ -6,23 +6,44 @@ use App\Models\Sale;
 use App\Models\Product;
 use App\Models\Customer;
 use App\Models\Faltante;
+use Illuminate\Http\Request;
 use Inertia\Inertia;
 
 class DashboardController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        // Estadísticas principales
-        $ventasHoy = Sale::ventasHoy();
-        $totalProductos = Product::totalProductos();
-        $totalClientes = Customer::totalClientes();
-        $faltantesPendientes = Faltante::faltantesPendientes();
+        // branchId = null para root (ve todo), int para usuarios de sucursal
+        $branchId = $request->user_branch_id;
 
-        // Calcular cambios porcentuales
-        $cambioVentas = Sale::porcentajeCambioHoy();
+        // ── Ventas (filtradas por sucursal) ───────────────────────────────
+        $ventasHoy  = Sale::whereDate('created_at', today())
+            ->when($branchId, fn($q) => $q->where('branch_id', $branchId))
+            ->sum('total');
+        $ventasAyer = Sale::whereDate('created_at', today()->subDay())
+            ->when($branchId, fn($q) => $q->where('branch_id', $branchId))
+            ->sum('total');
+        $cambioVentas = $ventasAyer == 0
+            ? ($ventasHoy > 0 ? 100 : 0)
+            : round((($ventasHoy - $ventasAyer) / $ventasAyer) * 100, 1);
+
+        // ── Faltantes (filtrados por sucursal) ────────────────────────────
+        $faltantesPendientes = Faltante::where('confirmado', false)
+            ->when($branchId, fn($q) => $q->where('branch_id', $branchId))
+            ->count();
+        $faltantesHoy  = Faltante::whereDate('created_at', today())
+            ->when($branchId, fn($q) => $q->where('branch_id', $branchId))
+            ->count();
+        $faltantesAyer = Faltante::whereDate('created_at', today()->subDay())
+            ->when($branchId, fn($q) => $q->where('branch_id', $branchId))
+            ->count();
+        $cambioFaltantes = $faltantesHoy - $faltantesAyer;
+
+        // ── Productos y Clientes (catálogo global — sin branch_id) ────────
+        $totalProductos  = Product::totalProductos();
+        $totalClientes   = Customer::totalClientes();
         $cambioProductos = Product::productosNuevosHoy();
-        $cambioClientes = Customer::clientesNuevosHoy();
-        $cambioFaltantes = Faltante::cambioFaltantes();
+        $cambioClientes  = Customer::clientesNuevosHoy();
 
         $mainStats = [
             [
@@ -71,11 +92,44 @@ class DashboardController extends Controller
             ]
         ];
 
-        // Ventas recientes
-        $recentSales = Sale::ventasRecientes(4);
+        // ── Ventas recientes (filtradas por sucursal) ─────────────────────
+        $recentSales = Sale::with(['customer', 'user', 'saleDetails.product'])
+            ->when($branchId, fn($q) => $q->where('branch_id', $branchId))
+            ->latest()
+            ->take(4)
+            ->get()
+            ->map(function ($sale) {
+                $firstDetail = $sale->saleDetails->first();
+                return [
+                    'product'  => $firstDetail ? $firstDetail->descripcion_completa : 'N/A',
+                    'quantity' => $sale->saleDetails->sum('quantity'),
+                    'amount'   => '$' . number_format($sale->total, 0),
+                    'time'     => $sale->created_at->diffForHumans(),
+                    'customer' => $sale->customer ? $sale->customer->name : 'Cliente general',
+                ];
+            });
 
-        // Top productos
-        $topProducts = Product::topProductos(4);
+        // ── Top productos (filtrados por sucursal) ────────────────────────
+        $topProducts = Product::select('products.*')
+            ->join('sale_details', 'products.id', '=', 'sale_details.product_id')
+            ->join('sales', 'sale_details.sale_id', '=', 'sales.id')
+            ->where('sale_details.tipo_venta', 'catalogo')
+            ->when($branchId, fn($q) => $q->where('sales.branch_id', $branchId))
+            ->groupBy('products.id')
+            ->selectRaw('SUM(sale_details.quantity) as total_ventas')
+            ->selectRaw('SUM(sale_details.subtotal) as total_ingresos')
+            ->orderByDesc('total_ventas')
+            ->take(4)
+            ->get()
+            ->map(function ($product) {
+                return [
+                    'name'    => $product->name,
+                    'sales'   => $product->total_ventas,
+                    'revenue' => '$' . number_format($product->total_ingresos, 0),
+                    'trend'   => 'up',
+                    'color'   => 'text-orange-600',
+                ];
+            });
 
         // Si no hay datos, usar datos de ejemplo
         if ($topProducts->isEmpty()) {
@@ -96,6 +150,7 @@ class DashboardController extends Controller
         // Alerta de stock bajo — query directa, sin cargar todos los productos en memoria
         try {
             $productosStockBajo = \App\Models\BranchInventory::selectRaw('product_id')
+                ->when($branchId, fn($q) => $q->where('branch_id', $branchId))
                 ->groupBy('product_id')
                 ->havingRaw('SUM(stock) BETWEEN 0 AND 2')
                 ->count();
@@ -125,7 +180,10 @@ class DashboardController extends Controller
         }
 
         // Alerta de éxito
-        $ventasMes = Sale::ventasMes();
+        $ventasMes = Sale::whereMonth('created_at', now()->month)
+            ->whereYear('created_at', now()->year)
+            ->when($branchId, fn($q) => $q->where('branch_id', $branchId))
+            ->sum('total');
         if ($ventasMes > 50000) { // Meta de ejemplo
             $alerts[] = [
                 'type' => 'success',

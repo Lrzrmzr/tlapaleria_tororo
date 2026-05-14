@@ -78,6 +78,8 @@ class ProductApiController extends Controller
      */
     public function store(Request $request)
     {
+        $this->authorizeAdminOrRoot($request);
+
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
@@ -102,6 +104,8 @@ class ProductApiController extends Controller
      */
     public function update(Request $request, int $id)
     {
+        $this->authorizeAdminOrRoot($request);
+
         $product = Product::findOrFail($id);
 
         $validated = $request->validate([
@@ -126,8 +130,10 @@ class ProductApiController extends Controller
     /**
      * Eliminar un producto
      */
-    public function destroy(int $id)
+    public function destroy(Request $request, int $id)
     {
+        $this->authorizeAdminOrRoot($request);
+
         $product = Product::findOrFail($id);
         $product->delete();
 
@@ -135,6 +141,14 @@ class ProductApiController extends Controller
             'success' => true,
             'message' => 'Producto eliminado exitosamente'
         ]);
+    }
+
+    private function authorizeAdminOrRoot(Request $request): void
+    {
+        $user = $request->user();
+        if (!$user || (!$user->isRoot() && !$user->isBranchAdmin())) {
+            abort(response()->json(['success' => false, 'message' => 'Solo administradores pueden gestionar el catálogo de productos.'], 403));
+        }
     }
 
     /**

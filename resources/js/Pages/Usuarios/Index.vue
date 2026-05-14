@@ -1,6 +1,6 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import { Head, router } from '@inertiajs/vue3';
+import { Head, router, useForm } from '@inertiajs/vue3';
 import { ref, computed } from 'vue';
 
 const props = defineProps({
@@ -15,6 +15,16 @@ const props = defineProps({
 const showModalDetalles = ref(false);
 const usuarioSeleccionado = ref(null);
 const filtroRol = ref('');
+const showModalCrear = ref(false);
+
+const nuevoUsuario = useForm({
+    name: '',
+    email: '',
+    password: '',
+    password_confirmation: '',
+    rol_id: '',
+    branch_id: '',
+});
 
 // Computed
 const usuariosFiltrados = computed(() => {
@@ -27,6 +37,15 @@ const usuariosFiltrados = computed(() => {
 
 const esAdmin = computed(() => {
     return props.user.id === 1 || props.user.role?.name === 'administrador';
+});
+
+const esRoot = computed(() => {
+    return props.user.role?.name === 'root' || props.user.id === 1;
+});
+
+const rolesParaCrear = computed(() => {
+    if (esRoot.value) return props.roles;
+    return props.roles.filter(r => r.name !== 'root');
 });
 
 // Funciones
@@ -53,6 +72,22 @@ function cerrarDetalles() {
     usuarioSeleccionado.value = null;
 }
 
+function abrirModalCrear() {
+    nuevoUsuario.reset();
+    showModalCrear.value = true;
+}
+
+function cerrarModalCrear() {
+    showModalCrear.value = false;
+    nuevoUsuario.reset();
+}
+
+function crearUsuario() {
+    nuevoUsuario.post(route('usuarios.store'), {
+        onSuccess: () => cerrarModalCrear(),
+    });
+}
+
 function getRolColor(rolName) {
     const colors = {
         'administrador': 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300',
@@ -77,6 +112,16 @@ function getRolColor(rolName) {
                         Administra usuarios y asigna roles del sistema
                     </p>
                 </div>
+                <button
+                    v-if="esAdmin"
+                    @click="abrirModalCrear"
+                    class="inline-flex items-center px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white text-sm font-semibold rounded-xl shadow-lg transition-all duration-300"
+                >
+                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                    </svg>
+                    Crear Usuario
+                </button>
             </div>
         </template>
 
@@ -326,6 +371,123 @@ function getRolColor(rolName) {
                     </div>
                 </div>
 
+            </div>
+        </div>
+
+        <!-- Modal Crear Usuario -->
+        <div v-if="showModalCrear" class="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-crear-title" role="dialog" aria-modal="true">
+            <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+                <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" @click="cerrarModalCrear"></div>
+                <span class="hidden sm:inline-block sm:align-middle sm:h-screen">&#8203;</span>
+                <div class="inline-block align-bottom bg-white dark:bg-gray-800 rounded-2xl text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+                    <div class="bg-gradient-to-r from-blue-500 to-indigo-600 px-6 py-4">
+                        <div class="flex items-center justify-between">
+                            <h3 id="modal-crear-title" class="text-xl font-bold text-white flex items-center">
+                                <svg class="w-6 h-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+                                </svg>
+                                Crear Nuevo Usuario
+                            </h3>
+                            <button type="button" @click="cerrarModalCrear" class="text-white hover:text-gray-200 transition-colors">
+                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+
+                    <form @submit.prevent="crearUsuario" class="bg-white dark:bg-gray-800 px-6 py-6">
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Nombre *</label>
+                                <input
+                                    v-model="nuevoUsuario.name"
+                                    type="text"
+                                    class="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                                    placeholder="Nombre completo"
+                                    required
+                                />
+                                <p v-if="nuevoUsuario.errors.name" class="text-red-500 text-xs mt-1">{{ nuevoUsuario.errors.name }}</p>
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Correo electrónico *</label>
+                                <input
+                                    v-model="nuevoUsuario.email"
+                                    type="email"
+                                    class="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                                    placeholder="correo@ejemplo.com"
+                                    required
+                                />
+                                <p v-if="nuevoUsuario.errors.email" class="text-red-500 text-xs mt-1">{{ nuevoUsuario.errors.email }}</p>
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Contraseña *</label>
+                                <input
+                                    v-model="nuevoUsuario.password"
+                                    type="password"
+                                    class="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                                    placeholder="Mínimo 8 caracteres"
+                                    required
+                                />
+                                <p v-if="nuevoUsuario.errors.password" class="text-red-500 text-xs mt-1">{{ nuevoUsuario.errors.password }}</p>
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Confirmar contraseña *</label>
+                                <input
+                                    v-model="nuevoUsuario.password_confirmation"
+                                    type="password"
+                                    class="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                                    placeholder="Repite la contraseña"
+                                    required
+                                />
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Rol</label>
+                                <select
+                                    v-model="nuevoUsuario.rol_id"
+                                    class="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                                >
+                                    <option value="">Sin rol</option>
+                                    <option v-for="rol in rolesParaCrear" :key="rol.id" :value="rol.id">{{ rol.name }}</option>
+                                </select>
+                                <p v-if="nuevoUsuario.errors.rol_id" class="text-red-500 text-xs mt-1">{{ nuevoUsuario.errors.rol_id }}</p>
+                            </div>
+
+                            <div v-if="esRoot">
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Sucursal</label>
+                                <select
+                                    v-model="nuevoUsuario.branch_id"
+                                    class="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                                >
+                                    <option value="">Sin sucursal</option>
+                                    <option v-for="branch in branches" :key="branch.id" :value="branch.id">{{ branch.name }}</option>
+                                </select>
+                                <p v-if="nuevoUsuario.errors.branch_id" class="text-red-500 text-xs mt-1">{{ nuevoUsuario.errors.branch_id }}</p>
+                            </div>
+                        </div>
+
+                        <div class="mt-6 flex justify-end gap-3">
+                            <button
+                                type="button"
+                                @click="cerrarModalCrear"
+                                class="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                type="submit"
+                                :disabled="nuevoUsuario.processing"
+                                class="px-6 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 disabled:opacity-50 text-white rounded-lg font-semibold shadow-lg transition-all"
+                            >
+                                {{ nuevoUsuario.processing ? 'Creando...' : 'Crear Usuario' }}
+                            </button>
+                        </div>
+                    </form>
+                </div>
             </div>
         </div>
 

@@ -24,6 +24,15 @@ class CheckBranchAccess
             return $next($request);
         }
 
+        // Usuarios desactivados: cerrar sesión inmediatamente
+        if (!$user->active) {
+            auth()->logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+            return redirect()->route('login')
+                ->withErrors(['error' => 'Tu cuenta ha sido desactivada. Contacta al administrador.']);
+        }
+
         // Clientes (ID=4) NO tienen acceso al sistema actualmente (para futuras ventas en línea)
         if ($user->isClient()) {
             return redirect()->route('login')

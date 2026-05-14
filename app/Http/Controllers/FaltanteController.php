@@ -12,7 +12,15 @@ class FaltanteController extends Controller
 {
     public function index(Request $request)
     {
+        $branchId = $request->user_branch_id;
+        $isRoot   = $request->is_root ?? false;
+
         $query = Faltante::with('user')->latest();
+
+        if (!$isRoot) {
+            $query->where('branch_id', $branchId);
+        }
+
         if ($request->has('confirmado')) {
             $query->where('confirmado', $request->confirmado);
         }
@@ -20,7 +28,7 @@ class FaltanteController extends Controller
         if ($request->has('pedido') && $request->pedido !== '' && $request->pedido !== null) {
             $query->where('pedido', $request->pedido);
         }
-        $faltantes = $query->paginate(100)->through(fn($faltante) => [
+        $faltantes = $query->get()->map(fn($faltante) => [
             'id'          => $faltante->id,
             'descripcion' => $faltante->descripcion,
             'quantity'    => $faltante->quantity,
@@ -30,7 +38,7 @@ class FaltanteController extends Controller
             'created_at'  => $faltante->created_at->format('H:i'),
             'fecha'       => $faltante->created_at->format('d/m/Y'),
             'user'        => $faltante->user->name,
-        ]);
+        ])->values();
 
         // Stats calculadas en BD, no en colección
         $branchId            = $request->user_branch_id;
@@ -78,9 +86,10 @@ class FaltanteController extends Controller
     {
         Faltante::create([
             'descripcion' => $request->descripcion,
-            'pedido' => $request->pedido,
-            'confirmado' => $request->confirmado ?? 0,
-            'user_id' => Auth::id(),
+            'pedido'      => $request->pedido,
+            'confirmado'  => $request->confirmado ?? 0,
+            'user_id'     => Auth::id(),
+            'branch_id'   => $request->user_branch_id,
         ]);
         return redirect()->back();
     }

@@ -41,7 +41,7 @@ class CuentaPorCobrarController extends Controller
             });
         }
 
-        $cuentas = $query->latest()->paginate(50)->through(fn($c) => $this->formatCuenta($c));
+        $cuentas = $query->latest()->get()->map(fn($c) => $this->formatCuenta($c))->values();
 
         $statsQuery = CuentaPorCobrar::query();
         if (!$isRoot) $statsQuery->where('branch_id', $userBranchId);
