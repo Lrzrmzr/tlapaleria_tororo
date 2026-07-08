@@ -4,7 +4,9 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\BranchInventory;
+use App\Models\InventoryMovement;
 use App\Models\Product;
+use App\Models\SystemSetting;
 use Illuminate\Http\Request;
 
 class InventarioApiController extends Controller
@@ -38,12 +40,13 @@ class InventarioApiController extends Controller
         // Filtro: Por estado de stock
         if ($request->filled('stock_status')) {
             $status = $request->stock_status;
+            $stockCritico = SystemSetting::stockCriticoThreshold();
             if ($status === 'agotado') {
                 $query->where('stock', 0);
             } elseif ($status === 'critico') {
-                $query->where('stock', '>', 0)->where('stock', '<=', 2);
+                $query->where('stock', '>', 0)->where('stock', '<=', $stockCritico);
             } elseif ($status === 'bajo') {
-                $query->whereColumn('stock', '<=', 'min_stock')->where('stock', '>', 2);
+                $query->whereColumn('stock', '<=', 'min_stock')->where('stock', '>', $stockCritico);
             }
         }
 
@@ -105,16 +108,22 @@ class InventarioApiController extends Controller
         }
 
         $oldStock = $inventario->stock;
-        $inventario->stock += $validated['adjustment'];
 
-        if ($inventario->stock < 0) {
+        try {
+            InventoryMovement::aplicar(
+                $inventario,
+                'ajuste',
+                $validated['adjustment'],
+                $validated['reason'] ?? 'Ajuste desde app móvil',
+                null,
+                $user->id
+            );
+        } catch (\RuntimeException $e) {
             return response()->json([
                 'success' => false,
                 'message' => 'El stock no puede ser negativo'
             ], 400);
         }
-
-        $inventario->save();
 
         return response()->json([
             'success' => true,
@@ -193,7 +202,7 @@ class InventarioApiController extends Controller
             ], 400);
         }
 
-        $productos = Product::whereDoesntHave('inventory', function ($q) use ($branchId) {
+        $productos = Product::whereDoesntHave('branchInventory', function ($q) use ($branchId) {
             $q->where('branch_id', $branchId);
         })->get();
 

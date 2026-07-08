@@ -5,7 +5,12 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class PurchaseDetail extends Model
 {
-    protected $fillable = ['purchase_id', 'product_id', 'quantity', 'cost', 'subtotal'];
+    protected $fillable = ['purchase_id', 'product_id', 'descripcion', 'quantity', 'cost', 'subtotal'];
+
+    protected $casts = [
+        'cost'     => 'decimal:2',
+        'subtotal' => 'decimal:2',
+    ];
 
     public function purchase(): BelongsTo
     {

@@ -4,6 +4,9 @@ Bienvenido a la documentación del sistema de gestión para Ferretería TOTORO.
 
 ## 📋 Índice de Documentación
 
+### Tests E2E
+- **[TESTS_E2E_PLAYWRIGHT.md](TESTS_E2E_PLAYWRIGHT.md)** - 🧪 Guía completa de pruebas end-to-end con Playwright
+
 ### API REST
 - **[API_RESUMEN.md](API_RESUMEN.md)** - ⚡ Resumen rápido de todos los endpoints
 - **[API_DOCUMENTATION.md](API_DOCUMENTATION.md)** - 📖 Documentación completa de la API

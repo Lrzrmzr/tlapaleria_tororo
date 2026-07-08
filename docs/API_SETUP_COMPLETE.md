@@ -337,23 +337,23 @@ El proyecto ya tenía Passport instalado, por lo que se utilizó en lugar de San
 
 ```bash
 # Instalar Capacitor
-npm install @capacitor/core @capacitor/cli
+pnpm add @capacitor/core @capacitor/cli
 
 # Inicializar Capacitor
-npx cap init
+pnpm exec cap init
 
 # Agregar plataforma Android
-npm install @capacitor/android
-npx cap add android
+pnpm add @capacitor/android
+pnpm exec cap add android
 
 # Construir la aplicación web
-npm run build
+pnpm run build
 
 # Copiar assets a Android
-npx cap copy android
+pnpm exec cap copy android
 
 # Abrir en Android Studio
-npx cap open android
+pnpm exec cap open android
 ```
 
 ### 2. Configurar Cliente HTTP
@@ -361,7 +361,7 @@ npx cap open android
 Instalar Axios o usar Fetch API:
 
 ```bash
-npm install axios
+pnpm add axios
 ```
 
 Crear servicio de API:
@@ -443,13 +443,13 @@ export const productService = {
 ### 5. Implementar Almacenamiento Offline (Opcional)
 
 ```bash
-npm install @capacitor/preferences
+pnpm add @capacitor/preferences
 ```
 
 ### 6. Agregar Notificaciones Push (Opcional)
 
 ```bash
-npm install @capacitor/push-notifications
+pnpm add @capacitor/push-notifications
 ```
 
 ---

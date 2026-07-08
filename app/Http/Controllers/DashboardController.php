@@ -6,6 +6,7 @@ use App\Models\Sale;
 use App\Models\Product;
 use App\Models\Customer;
 use App\Models\Faltante;
+use App\Models\SystemSetting;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
@@ -16,11 +17,11 @@ class DashboardController extends Controller
         // branchId = null para root (ve todo), int para usuarios de sucursal
         $branchId = $request->user_branch_id;
 
-        // ── Ventas (filtradas por sucursal) ───────────────────────────────
-        $ventasHoy  = Sale::whereDate('created_at', today())
+        // ── Ventas (filtradas por sucursal, excluye canceladas) ────────────
+        $ventasHoy  = Sale::completed()->whereDate('created_at', today())
             ->when($branchId, fn($q) => $q->where('branch_id', $branchId))
             ->sum('total');
-        $ventasAyer = Sale::whereDate('created_at', today()->subDay())
+        $ventasAyer = Sale::completed()->whereDate('created_at', today()->subDay())
             ->when($branchId, fn($q) => $q->where('branch_id', $branchId))
             ->sum('total');
         $cambioVentas = $ventasAyer == 0
@@ -92,8 +93,8 @@ class DashboardController extends Controller
             ]
         ];
 
-        // ── Ventas recientes (filtradas por sucursal) ─────────────────────
-        $recentSales = Sale::with(['customer', 'user', 'saleDetails.product'])
+        // ── Ventas recientes (filtradas por sucursal, excluye canceladas) ──
+        $recentSales = Sale::completed()->with(['customer', 'user', 'saleDetails.product'])
             ->when($branchId, fn($q) => $q->where('branch_id', $branchId))
             ->latest()
             ->take(4)
@@ -109,11 +110,12 @@ class DashboardController extends Controller
                 ];
             });
 
-        // ── Top productos (filtrados por sucursal) ────────────────────────
+        // ── Top productos (filtrados por sucursal, excluye canceladas) ─────
         $topProducts = Product::select('products.*')
             ->join('sale_details', 'products.id', '=', 'sale_details.product_id')
             ->join('sales', 'sale_details.sale_id', '=', 'sales.id')
             ->where('sale_details.tipo_venta', 'catalogo')
+            ->where('sales.status', 'completed')
             ->when($branchId, fn($q) => $q->where('sales.branch_id', $branchId))
             ->groupBy('products.id')
             ->selectRaw('SUM(sale_details.quantity) as total_ventas')
@@ -148,11 +150,12 @@ class DashboardController extends Controller
         $alerts = [];
 
         // Alerta de stock bajo — query directa, sin cargar todos los productos en memoria
+        $stockCritico = SystemSetting::stockCriticoThreshold();
         try {
             $productosStockBajo = \App\Models\BranchInventory::selectRaw('product_id')
                 ->when($branchId, fn($q) => $q->where('branch_id', $branchId))
                 ->groupBy('product_id')
-                ->havingRaw('SUM(stock) BETWEEN 0 AND 2')
+                ->havingRaw('SUM(stock) BETWEEN 0 AND ?', [$stockCritico])
                 ->count();
         } catch (\Exception) {
             $productosStockBajo = 0;
@@ -163,7 +166,7 @@ class DashboardController extends Controller
                 'type' => 'warning',
                 'icon' => '⚠️',
                 'title' => 'Stock Bajo',
-                'message' => $productosStockBajo . ' productos con stock crítico (≤ 2 unidades)',
+                'message' => $productosStockBajo . " productos con stock crítico (≤ {$stockCritico} unidades)",
                 'color' => 'border-yellow-500 bg-yellow-50 dark:bg-yellow-900/20'
             ];
         }
@@ -180,7 +183,7 @@ class DashboardController extends Controller
         }
 
         // Alerta de éxito
-        $ventasMes = Sale::whereMonth('created_at', now()->month)
+        $ventasMes = Sale::completed()->whereMonth('created_at', now()->month)
             ->whereYear('created_at', now()->year)
             ->when($branchId, fn($q) => $q->where('branch_id', $branchId))
             ->sum('total');

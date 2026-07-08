@@ -3,9 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Models\BranchInventory;
+use App\Models\InventoryMovement;
 use App\Models\Product;
 use App\Models\Branch;
+use App\Models\SystemSetting;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
 
 class InventarioController extends Controller
@@ -43,15 +46,19 @@ class InventarioController extends Controller
         }
 
         // Filtro: Por estado de stock
+        $stockCritico = SystemSetting::stockCriticoThreshold();
         if ($request->filled('stock_status')) {
             $status = $request->stock_status;
             if ($status === 'agotado') {
                 $query->where('stock', 0);
             } elseif ($status === 'critico') {
-                $query->where('stock', '>', 0)->where('stock', '<=', 2);
+                $query->where('stock', '>', 0)->where('stock', '<=', $stockCritico);
             } elseif ($status === 'bajo') {
                 $query->whereColumn('stock', '<=', 'min_stock')
-                      ->where('stock', '>', 2);
+                      ->where('stock', '>', $stockCritico);
+            } elseif ($status === 'sobre') {
+                $query->where('max_stock', '>', 0)
+                      ->whereColumn('stock', '>', 'max_stock');
             }
         }
 
@@ -87,7 +94,8 @@ class InventarioController extends Controller
                 'min_stock' => $inventario->min_stock ?? 0,
                 'max_stock' => $inventario->max_stock ?? 0,
                 'cost' => $inventario->cost ?? 0,
-                'status' => $this->getStockStatus($inventario->stock ?? 0, $inventario->min_stock ?? 0),
+                'status' => $this->getStockStatus($inventario->stock ?? 0, $inventario->min_stock ?? 0, $inventario->max_stock ?? 0),
+                'sobre_stock' => ($inventario->max_stock ?? 0) > 0 && ($inventario->stock ?? 0) > $inventario->max_stock,
                 'updated_at' => $inventario->updated_at->format('d/m/Y H:i'),
             ];
         });
@@ -125,33 +133,24 @@ class InventarioController extends Controller
         $totalProductos = Product::where('active', true)->count();
 
         if (!$isRoot) {
-            $productosConInventario = BranchInventory::where('branch_id', $userBranchId)->count();
-            $productosStockBajo = BranchInventory::where('branch_id', $userBranchId)
-                ->whereColumn('stock', '<=', 'min_stock')
-                ->where('stock', '>', 0)
-                ->count();
-            $productosAgotados = BranchInventory::where('branch_id', $userBranchId)
-                ->where('stock', 0)
-                ->count();
+            $statsScope = fn() => BranchInventory::where('branch_id', $userBranchId);
+        } elseif ($request->filled('branch_id')) {
+            $branchId = $request->branch_id;
+            $statsScope = fn() => BranchInventory::where('branch_id', $branchId);
         } else {
-            if ($request->filled('branch_id')) {
-                $branchId = $request->branch_id;
-                $productosConInventario = BranchInventory::where('branch_id', $branchId)->count();
-                $productosStockBajo = BranchInventory::where('branch_id', $branchId)
-                    ->whereColumn('stock', '<=', 'min_stock')
-                    ->where('stock', '>', 0)
-                    ->count();
-                $productosAgotados = BranchInventory::where('branch_id', $branchId)
-                    ->where('stock', 0)
-                    ->count();
-            } else {
-                $productosConInventario = BranchInventory::count();
-                $productosStockBajo = BranchInventory::whereColumn('stock', '<=', 'min_stock')
-                    ->where('stock', '>', 0)
-                    ->count();
-                $productosAgotados = BranchInventory::where('stock', 0)->count();
-            }
+            $statsScope = fn() => BranchInventory::query();
         }
+
+        $productosConInventario = $statsScope()->count();
+        $productosStockBajo = $statsScope()
+            ->whereColumn('stock', '<=', 'min_stock')
+            ->where('stock', '>', 0)
+            ->count();
+        $productosAgotados = $statsScope()->where('stock', 0)->count();
+        $productosSobreStock = $statsScope()
+            ->where('max_stock', '>', 0)
+            ->whereColumn('stock', '>', 'max_stock')
+            ->count();
 
         return Inertia::render('Inventario/Index', [
             'inventarios' => $inventarios,
@@ -172,6 +171,7 @@ class InventarioController extends Controller
                 'conInventario' => $productosConInventario,
                 'stockBajo' => $productosStockBajo,
                 'agotados' => $productosAgotados,
+                'sobreStock' => $productosSobreStock,
             ]
         ]);
     }
@@ -246,19 +246,22 @@ class InventarioController extends Controller
         $request->validate([
             'cantidad' => 'required|integer|min:1',
             'tipo'     => 'required|in:entrada,salida',
+            'motivo'   => 'nullable|string|max:255',
         ]);
 
-        if ($request->tipo === 'entrada') {
-            $inventario->increment('stock', $request->cantidad);
-        } else {
-            // Decremento atómico — no permite stock negativo
-            $affected = BranchInventory::where('id', $inventario->id)
-                ->where('stock', '>=', $request->cantidad)
-                ->decrement('stock', $request->cantidad);
+        $delta = $request->tipo === 'entrada' ? $request->cantidad : -$request->cantidad;
 
-            if (!$affected) {
-                return redirect()->back()->withErrors(['error' => 'Stock insuficiente para esta salida.']);
-            }
+        try {
+            InventoryMovement::aplicar(
+                $inventario,
+                'ajuste',
+                $delta,
+                $request->motivo ?? 'Ajuste manual de inventario',
+                null,
+                Auth::id()
+            );
+        } catch (\RuntimeException $e) {
+            return redirect()->back()->withErrors(['error' => $e->getMessage()]);
         }
 
         return redirect()->back()->with('success', 'Stock ajustado correctamente');
@@ -281,14 +284,16 @@ class InventarioController extends Controller
         }
     }
 
-    private function getStockStatus($quantity, $minStock)
+    private function getStockStatus($quantity, $minStock, $maxStock = 0)
     {
         if ($quantity === 0) {
             return 'agotado';
-        } elseif ($quantity <= 2) {
+        } elseif ($quantity <= SystemSetting::stockCriticoThreshold()) {
             return 'critico';
         } elseif ($quantity <= $minStock) {
             return 'bajo';
+        } elseif ($maxStock > 0 && $quantity > $maxStock) {
+            return 'sobre';
         }
         return 'normal';
     }

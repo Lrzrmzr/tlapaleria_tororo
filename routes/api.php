@@ -4,7 +4,6 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\ProductApiController;
 use App\Http\Controllers\Api\InventarioApiController;
 use App\Http\Controllers\Api\GastoApiController;
-use App\Http\Controllers\Api\VentaApiController;
 use App\Http\Controllers\Api\FaltanteApiController;
 use App\Http\Controllers\Api\BranchApiController;
 use App\Http\Controllers\CategoryController;
@@ -74,12 +73,6 @@ Route::middleware(['auth:api'])->group(function () {
     Route::post('/mobile/gastos', [GastoApiController::class, 'store']);
     Route::put('/mobile/gastos/{id}', [GastoApiController::class, 'update']);
     Route::delete('/mobile/gastos/{id}', [GastoApiController::class, 'destroy']);
-
-    // Ventas
-    Route::get('/mobile/ventas', [VentaApiController::class, 'index']);
-    Route::get('/mobile/ventas/{id}', [VentaApiController::class, 'show']);
-    Route::post('/mobile/ventas', [VentaApiController::class, 'store']);
-    Route::delete('/mobile/ventas/{id}', [VentaApiController::class, 'destroy']);
 
     // Faltantes
     Route::get('/mobile/faltantes', [FaltanteApiController::class, 'index']);

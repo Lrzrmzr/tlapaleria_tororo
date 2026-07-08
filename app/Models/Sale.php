@@ -12,12 +12,17 @@ class Sale extends Model
 {
     use SoftDeletes, LogsActivity;
 
-    protected $fillable = ['customer_id', 'user_id', 'branch_id', 'total', 'status', 'idempotency_key'];
+    protected $fillable = [
+        'customer_id', 'user_id', 'branch_id', 'total', 'status', 'idempotency_key',
+        'fecha_venta', 'metodo_pago', 'canal', 'cancelled_by', 'cancelled_at', 'cancel_reason',
+    ];
 
     protected $casts = [
         'total' => 'decimal:2',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
+        'fecha_venta' => 'date',
+        'cancelled_at' => 'datetime',
     ];
 
     public function customer(): BelongsTo

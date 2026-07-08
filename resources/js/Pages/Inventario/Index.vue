@@ -164,6 +164,7 @@ function getStatusColor(status) {
         'bajo': 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300',
         'critico': 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300',
         'agotado': 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300',
+        'sobre': 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300',
     };
     return colors[status] || colors.normal;
 }
@@ -174,6 +175,7 @@ function getStatusText(status) {
         'bajo': 'Stock Bajo',
         'critico': 'Crítico',
         'agotado': 'Agotado',
+        'sobre': 'Sobre-stock',
     };
     return texts[status] || 'Normal';
 }
@@ -231,7 +233,7 @@ function formatMoney(value) {
         <div class="mx-auto max-w-7xl">
             <div class="mb-6">
                 <!-- Stats Cards -->
-                <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+                <div class="grid grid-cols-1 md:grid-cols-5 gap-6 mb-8">
                     <div class="bg-gradient-to-br from-blue-50 to-cyan-50 dark:from-blue-900/20 dark:to-cyan-900/20 rounded-2xl p-6 shadow-lg">
                         <div class="flex items-center justify-between">
                             <div>
@@ -295,6 +297,22 @@ function formatMoney(value) {
                             </div>
                         </div>
                     </div>
+
+                    <div class="bg-gradient-to-br from-purple-50 to-fuchsia-50 dark:from-purple-900/20 dark:to-fuchsia-900/20 rounded-2xl p-6 shadow-lg">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm font-medium text-purple-600 dark:text-purple-400 uppercase">Sobre-stock</p>
+                                <p class="text-3xl font-bold text-gray-900 dark:text-white mt-2">
+                                    {{ stats.sobreStock }}
+                                </p>
+                            </div>
+                            <div class="bg-gradient-to-br from-purple-500 to-fuchsia-600 w-16 h-16 rounded-xl flex items-center justify-center shadow-lg">
+                                <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18" />
+                                </svg>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Selector de Sucursal (solo para Root) -->
@@ -344,6 +362,7 @@ function formatMoney(value) {
                                 <option value="bajo">Stock Bajo</option>
                                 <option value="critico">Crítico</option>
                                 <option value="agotado">Agotado</option>
+                                <option value="sobre">Sobre-stock</option>
                             </select>
                         </div>
                         <div class="flex items-center gap-4 mt-6">

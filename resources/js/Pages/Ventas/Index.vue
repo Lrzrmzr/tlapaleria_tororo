@@ -44,14 +44,23 @@ function newIdempotencyKey() {
 const formLibre = useForm({
     descripcion:      '',
     total:            0,
+    metodo_pago:      'efectivo',
     idempotency_key:  newIdempotencyKey(),
 });
 
 // Form para venta de catálogo
 const formCatalogo = useForm({
     items:            [], // Array de { product_id, quantity }
+    metodo_pago:      'efectivo',
     idempotency_key:  newIdempotencyKey(),
 });
+
+// Cancelación de venta
+function cancelarVenta(venta) {
+    const motivo = window.prompt('Motivo de la cancelación (se restituirá el stock vendido):');
+    if (!motivo) return;
+    router.post(route('ventas.cancelar', venta.id), { motivo }, { preserveScroll: true });
+}
 
 // Carrito de compras para venta de catálogo
 const carritoItems = ref([]);
@@ -73,12 +82,14 @@ function submitVentaLibre() {
     });
 }
 
-// Calcular totales
+// Calcular totales (excluye ventas canceladas)
+const ventasVigentes = computed(() => props.ventas.filter(v => v.status !== 'cancelled'));
+
 const totalVentasDia = computed(() => {
-    return props.ventas.reduce((sum, venta) => sum + parseFloat(venta.total), 0);
+    return ventasVigentes.value.reduce((sum, venta) => sum + parseFloat(venta.total), 0);
 });
 
-const cantidadVentas = computed(() => props.ventas.length);
+const cantidadVentas = computed(() => ventasVigentes.value.length);
 
 // Formatear moneda
 function formatMoney(value) {
@@ -377,6 +388,9 @@ function abrirModalCatalogo() {
                                         Total
                                     </th>
                                     <th class="px-6 py-4 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                        Pago
+                                    </th>
+                                    <th class="px-6 py-4 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                                         Vendedor
                                     </th>
                                     <th class="px-6 py-4 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
@@ -386,7 +400,7 @@ function abrirModalCatalogo() {
                             </thead>
                             <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                                 <tr v-if="ventas.length === 0">
-                                    <td colspan="6" class="px-6 py-12 text-center text-gray-500 dark:text-gray-400">
+                                    <td colspan="7" class="px-6 py-12 text-center text-gray-500 dark:text-gray-400">
                                         <svg class="w-16 h-16 mx-auto mb-4 text-gray-300 dark:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
                                         </svg>
@@ -394,11 +408,14 @@ function abrirModalCatalogo() {
                                         <p class="text-sm mt-1">Cambia el rango de fechas o registra una nueva venta</p>
                                     </td>
                                 </tr>
-                                <tr v-for="venta in ventas" :key="venta.id" class="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                                <tr v-for="venta in ventas" :key="venta.id" :class="['hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors', venta.status === 'cancelled' ? 'opacity-50' : '']">
                                     <td class="px-6 py-4 whitespace-nowrap">
                                         <div class="text-sm">
                                             <div class="font-medium text-gray-900 dark:text-white">{{ venta.created_at }}</div>
                                             <div class="text-gray-500 dark:text-gray-400">{{ venta.fecha }}</div>
+                                            <span v-if="venta.status === 'cancelled'" class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300 mt-1">
+                                                Cancelada
+                                            </span>
                                         </div>
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap">
@@ -430,11 +447,16 @@ function abrirModalCatalogo() {
                                         </span>
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap">
+                                        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300 capitalize">
+                                            {{ venta.metodo_pago }}
+                                        </span>
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap">
                                         <span class="text-sm text-gray-500 dark:text-gray-400">
                                             {{ venta.user }}
                                         </span>
                                     </td>
-                                    <td class="px-6 py-4 whitespace-nowrap text-right">
+                                    <td class="px-6 py-4 whitespace-nowrap text-right space-x-2">
                                         <button
                                             @click="verDetalles(venta)"
                                             class="inline-flex items-center px-3 py-2 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white text-sm font-medium rounded-lg transition-all duration-300 shadow-md hover:shadow-lg"
@@ -444,6 +466,13 @@ function abrirModalCatalogo() {
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                                             </svg>
                                             Ver Detalles
+                                        </button>
+                                        <button
+                                            v-if="venta.status !== 'cancelled'"
+                                            @click="cancelarVenta(venta)"
+                                            class="inline-flex items-center px-3 py-2 bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:hover:bg-red-900/30 text-red-700 dark:text-red-300 text-sm font-medium rounded-lg transition-colors"
+                                        >
+                                            Cancelar
                                         </button>
                                     </td>
                                 </tr>
@@ -512,6 +541,20 @@ function abrirModalCatalogo() {
                                             required
                                         />
                                     </div>
+                                </div>
+
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                        Método de pago
+                                    </label>
+                                    <select
+                                        v-model="formLibre.metodo_pago"
+                                        class="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-3 focus:ring-2 focus:ring-orange-500 dark:bg-gray-700 dark:text-white"
+                                    >
+                                        <option value="efectivo">Efectivo</option>
+                                        <option value="tarjeta">Tarjeta</option>
+                                        <option value="transferencia">Transferencia</option>
+                                    </select>
                                 </div>
                             </div>
                         </div>
@@ -737,6 +780,21 @@ function abrirModalCatalogo() {
                                             </svg>
                                         </button>
                                     </div>
+                                </div>
+
+                                <!-- Método de pago -->
+                                <div v-if="carritoItems.length > 0" class="mt-4">
+                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                        Método de pago
+                                    </label>
+                                    <select
+                                        v-model="formCatalogo.metodo_pago"
+                                        class="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                                    >
+                                        <option value="efectivo">Efectivo</option>
+                                        <option value="tarjeta">Tarjeta</option>
+                                        <option value="transferencia">Transferencia</option>
+                                    </select>
                                 </div>
 
                                 <!-- Total -->

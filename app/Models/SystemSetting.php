@@ -67,10 +67,26 @@ class SystemSetting extends Model
     }
 
     /**
+     * Verificar si las compras libres están habilitadas
+     */
+    public static function comprasLibresHabilitadas(): bool
+    {
+        return self::get('enable_compras_libres', true);
+    }
+
+    /**
      * Obtener el threshold de stock bajo
      */
     public static function stockBajoThreshold(): int
     {
         return self::get('stock_bajo_threshold', 5);
+    }
+
+    /**
+     * Obtener el threshold de stock crítico
+     */
+    public static function stockCriticoThreshold(): int
+    {
+        return self::get('stock_critico_threshold', 2);
     }
 }

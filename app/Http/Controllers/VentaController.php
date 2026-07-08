@@ -5,6 +5,7 @@ use App\Models\Sale;
 use App\Models\SaleDetail;
 use App\Models\Product;
 use App\Models\BranchInventory;
+use App\Models\InventoryMovement;
 use App\Models\SystemSetting;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -23,10 +24,7 @@ class VentaController extends Controller
         $search     = $request->search ?? '';
 
         $query = Sale::with(['saleDetails.product', 'customer', 'user'])
-            ->whereBetween('created_at', [
-                Carbon::parse($fechaDesde)->startOfDay(),
-                Carbon::parse($fechaHasta)->endOfDay(),
-            ]);
+            ->whereBetween('fecha_venta', [$fechaDesde, $fechaHasta]);
 
         if ($branchId && !$isRoot) {
             $query->where('branch_id', $branchId);
@@ -37,14 +35,22 @@ class VentaController extends Controller
         }
 
         $ventas = $query->latest()->get()->map(function ($sale) {
+            $utilidad = $sale->saleDetails->every(fn($d) => $d->cost !== null)
+                ? $sale->saleDetails->sum(fn($d) => $d->utilidad)
+                : null;
+
             return [
-                'id'         => $sale->id,
-                'total'      => $sale->total,
-                'customer'   => $sale->customer ? $sale->customer->name : 'Cliente general',
-                'user'       => $sale->user->name,
-                'created_at' => $sale->created_at->format('H:i'),
-                'fecha'      => $sale->created_at->format('d/m/Y'),
-                'details'    => $sale->saleDetails->map(function ($detail) {
+                'id'            => $sale->id,
+                'total'         => $sale->total,
+                'customer'      => $sale->customer ? $sale->customer->name : 'Cliente general',
+                'user'          => $sale->user->name,
+                'metodo_pago'   => $sale->metodo_pago,
+                'status'        => $sale->status,
+                'cancel_reason' => $sale->cancel_reason,
+                'utilidad'      => $utilidad,
+                'created_at'    => $sale->created_at->format('H:i'),
+                'fecha'         => optional($sale->fecha_venta)->format('d/m/Y') ?? $sale->created_at->format('d/m/Y'),
+                'details'       => $sale->saleDetails->map(function ($detail) {
                     return [
                         'tipo_venta'  => $detail->tipo_venta,
                         'descripcion' => $detail->tipo_venta === 'libre'
@@ -103,9 +109,15 @@ class VentaController extends Controller
 
     private function storeLibreVenta(Request $request)
     {
+        if (!SystemSetting::ventasLibresHabilitadas()) {
+            return redirect()->back()->withErrors(['error' => 'Las ventas libres están deshabilitadas.']);
+        }
+
         $request->validate([
             'descripcion'      => 'required|string|max:255',
             'total'            => 'required|numeric|min:0.01',
+            'metodo_pago'      => 'nullable|in:efectivo,tarjeta,transferencia',
+            'fecha_venta'      => 'nullable|date',
             'idempotency_key'  => 'nullable|string|max:64',
         ]);
 
@@ -125,10 +137,12 @@ class VentaController extends Controller
             'customer_id'      => null,
             'total'            => $totalVenta,
             'status'           => 'completed',
+            'metodo_pago'      => $request->metodo_pago ?? 'efectivo',
+            'fecha_venta'      => $request->fecha_venta ?? now()->toDateString(),
             'idempotency_key'  => $request->idempotency_key,
         ]);
 
-        // Crear el detalle de venta LIBRE
+        // Crear el detalle de venta LIBRE (sin producto, sin costo conocido)
         SaleDetail::create([
             'sale_id' => $venta->id,
             'product_id' => null,
@@ -136,6 +150,7 @@ class VentaController extends Controller
             'descripcion' => $request->descripcion,
             'quantity' => 1,
             'price' => $request->total,
+            'cost' => null,
             'subtotal' => $request->total,
             'total' => $request->total
         ]);
@@ -149,6 +164,8 @@ class VentaController extends Controller
             'items'                  => 'required|array|min:1',
             'items.*.product_id'     => 'required|exists:products,id',
             'items.*.quantity'       => 'required|integer|min:1',
+            'metodo_pago'             => 'nullable|in:efectivo,tarjeta,transferencia',
+            'fecha_venta'             => 'nullable|date',
             'idempotency_key'        => 'nullable|string|max:64',
         ]);
 
@@ -205,6 +222,8 @@ class VentaController extends Controller
                 'customer_id'      => null,
                 'total'            => $totalVenta,
                 'status'           => 'completed',
+                'metodo_pago'      => $validated['metodo_pago'] ?? 'efectivo',
+                'fecha_venta'      => $validated['fecha_venta'] ?? now()->toDateString(),
                 'idempotency_key'  => $validated['idempotency_key'] ?? null,
             ]);
 
@@ -220,18 +239,20 @@ class VentaController extends Controller
                     'descripcion' => $product->name,
                     'quantity'    => $item['quantity'],
                     'price'       => $product->price,
+                    'cost'        => $inventory->cost, // costo al momento de la venta, para calcular utilidad
                     'subtotal'    => $subtotal,
                     'total'       => $subtotal,
                 ]);
 
-                // Decremento atómico por ID de inventario — evita ambigüedad de sucursal para root
-                $affected = BranchInventory::where('id', $inventory->id)
-                    ->where('stock', '>=', $item['quantity'])
-                    ->decrement('stock', $item['quantity']);
-
-                if (!$affected) {
-                    throw new \Exception("Stock insuficiente para {$product->name} (intenta de nuevo).");
-                }
+                // Salida de inventario atómica + registro en el kardex
+                InventoryMovement::aplicar(
+                    $inventory,
+                    'salida',
+                    -$item['quantity'],
+                    'Venta #' . $venta->id,
+                    $venta,
+                    Auth::id()
+                );
             }
 
             DB::commit();
@@ -240,6 +261,65 @@ class VentaController extends Controller
         } catch (\Exception $e) {
             DB::rollBack();
             return redirect()->back()->withErrors(['error' => $e->getMessage()]);
+        }
+    }
+
+    /**
+     * Cancela una venta ya registrada y devuelve el stock vendido (solo artículos de catálogo).
+     */
+    public function cancelar(Request $request, Sale $venta)
+    {
+        $isRoot   = $request->is_root ?? false;
+        $branchId = $request->user_branch_id;
+
+        if (!$isRoot && $venta->branch_id !== $branchId) {
+            abort(403, 'No tienes acceso a ventas de otra sucursal.');
+        }
+
+        if ($venta->status === 'cancelled') {
+            return redirect()->back()->withErrors(['error' => 'Esta venta ya está cancelada.']);
+        }
+
+        $request->validate([
+            'motivo' => 'required|string|max:255',
+        ]);
+
+        DB::beginTransaction();
+        try {
+            foreach ($venta->saleDetails as $detail) {
+                if ($detail->tipo_venta !== 'catalogo' || !$detail->product_id) {
+                    continue;
+                }
+
+                $inventory = BranchInventory::where('branch_id', $venta->branch_id)
+                    ->where('product_id', $detail->product_id)
+                    ->first();
+
+                if ($inventory) {
+                    InventoryMovement::aplicar(
+                        $inventory,
+                        'devolucion',
+                        $detail->quantity,
+                        'Cancelación de venta #' . $venta->id,
+                        $venta,
+                        Auth::id()
+                    );
+                }
+            }
+
+            $venta->update([
+                'status'        => 'cancelled',
+                'cancelled_by'  => Auth::id(),
+                'cancelled_at'  => now(),
+                'cancel_reason' => $request->motivo,
+            ]);
+
+            DB::commit();
+            return redirect()->back()->with('success', 'Venta cancelada. El inventario fue restituido.');
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return redirect()->back()->withErrors(['error' => 'Error al cancelar la venta: ' . $e->getMessage()]);
         }
     }
 }

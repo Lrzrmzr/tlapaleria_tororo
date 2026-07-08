@@ -13,7 +13,7 @@ class ProductApiController extends Controller
      */
     public function index(Request $request)
     {
-        $query = Product::with(['supplier', 'categories', 'inventory']);
+        $query = Product::with(['supplier', 'categories', 'branchInventory']);
 
         // Filtro: Búsqueda por nombre, descripción o código de barras
         if ($request->filled('search')) {
@@ -160,7 +160,7 @@ class ProductApiController extends Controller
             'barcode' => 'required|string'
         ]);
 
-        $product = Product::with(['supplier', 'categories', 'inventory'])
+        $product = Product::with(['supplier', 'categories', 'branchInventory'])
             ->where('barcode', $request->barcode)
             ->first();
 

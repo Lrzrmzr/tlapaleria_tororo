@@ -10,11 +10,12 @@ class Gasto extends Model
 {
     use SoftDeletes, LogsActivity;
 
-    protected $fillable = ['descripcion', 'user_id', 'branch_id', 'monto', 'active'];
+    protected $fillable = ['descripcion', 'user_id', 'branch_id', 'monto', 'active', 'fecha_gasto'];
 
     protected $casts = [
         'monto' => 'decimal:2',
         'active' => 'boolean',
+        'fecha_gasto' => 'date',
     ];
 
     public function user(): BelongsTo

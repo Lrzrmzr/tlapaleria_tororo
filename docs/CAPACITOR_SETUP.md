@@ -192,29 +192,29 @@ if (isAdmin.value) {
 
 ```bash
 # Sincronizar cambios web con Android
-npx cap sync android
+pnpm exec cap sync android
 
 # Copiar assets web a Android (sin sincronizar plugins)
-npx cap copy android
+pnpm exec cap copy android
 
 # Actualizar plugins nativos
-npx cap update android
+pnpm exec cap update android
 
 # Abrir proyecto en Android Studio
-npx cap open android
+pnpm exec cap open android
 ```
 
 ### Build de Producción
 
 ```bash
 # 1. Compilar aplicación web
-npm run build
+pnpm run build
 
 # 2. Copiar a Android
-npx cap copy android
+pnpm exec cap copy android
 
 # 3. Abrir en Android Studio para generar APK/AAB
-npx cap open android
+pnpm exec cap open android
 ```
 
 ---
@@ -232,7 +232,7 @@ npx cap open android
 
 1. **Abrir Android Studio**:
    ```bash
-   npx cap open android
+   pnpm exec cap open android
    ```
 
 2. **Configurar dispositivo**:
@@ -415,8 +415,8 @@ Editar `android/app/src/main/AndroidManifest.xml`:
 ### Error: "Unable to load assets"
 **Solución**:
 ```bash
-npm run build
-npx cap sync android
+pnpm run build
+pnpm exec cap sync android
 ```
 
 ### Error: Token no se guarda

@@ -36,9 +36,10 @@ return [
     ],
 
     'groq' => [
-        'api_key' => env('GROQ_API_KEY'),
-        'model'   => env('GROQ_MODEL', 'llama-3.3-70b-versatile'),
-        'url'     => 'https://api.groq.com/openai/v1/chat/completions',
+        'api_key'      => env('GROQ_API_KEY'),
+        'model'        => env('GROQ_MODEL', 'llama-3.3-70b-versatile'),
+        'model_vision' => env('GROQ_MODEL_VISION', 'meta-llama/llama-4-scout-17b-16e-instruct'),
+        'url'          => 'https://api.groq.com/openai/v1/chat/completions',
     ],
 
 ];

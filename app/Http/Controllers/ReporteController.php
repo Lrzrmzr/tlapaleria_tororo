@@ -66,6 +66,7 @@ class ReporteController extends Controller
             fputcsv($f, ['RESUMEN']);
             fputcsv($f, ['Concepto', 'Monto']);
             fputcsv($f, ['Total Ventas',          $corte['total_ventas']]);
+            fputcsv($f, ['Utilidad Estimada',     $corte['total_utilidad']]);
             fputcsv($f, ['Cobros Recibidos',      $corte['total_cobros']]);
             fputcsv($f, ['Gastos del Período',    $corte['total_gastos']]);
             fputcsv($f, ['Pagos a Proveedores',   $corte['total_pagos']]);
@@ -122,16 +123,19 @@ class ReporteController extends Controller
             ? (int) $request->branch_id
             : $userBranchId;
 
-        // ── VENTAS ───────────────────────────────────────────────────────────
-        $ventasQ = Sale::whereBetween('created_at', [$fechaDesde, $fechaHasta])->completed();
+        $fdStr = $fechaDesde->toDateString();
+        $fhStr = $fechaHasta->toDateString();
+
+        // ── VENTAS ─ filtradas por fecha_venta (fecha de negocio, no de captura) ─
+        $ventasQ = Sale::whereBetween('fecha_venta', [$fdStr, $fhStr])->completed();
         if ($branchId) $ventasQ->where('branch_id', $branchId);
 
         $totalVentas = (float) $ventasQ->sum('total');
         $countVentas = (int)   $ventasQ->count();
 
         // Desglose libre / catálogo
-        $ventasPorTipo = SaleDetail::whereHas('sale', function ($q) use ($fechaDesde, $fechaHasta, $branchId) {
-            $q->whereBetween('created_at', [$fechaDesde, $fechaHasta])->completed();
+        $ventasPorTipo = SaleDetail::whereHas('sale', function ($q) use ($fdStr, $fhStr, $branchId) {
+            $q->whereBetween('fecha_venta', [$fdStr, $fhStr])->completed();
             if ($branchId) $q->where('branch_id', $branchId);
         })
         ->select(
@@ -150,8 +154,8 @@ class ReporteController extends Controller
         ]);
 
         // Top 10 productos por ingreso
-        $topProductos = SaleDetail::whereHas('sale', function ($q) use ($fechaDesde, $fechaHasta, $branchId) {
-            $q->whereBetween('created_at', [$fechaDesde, $fechaHasta])->completed();
+        $topProductos = SaleDetail::whereHas('sale', function ($q) use ($fdStr, $fhStr, $branchId) {
+            $q->whereBetween('fecha_venta', [$fdStr, $fhStr])->completed();
             if ($branchId) $q->where('branch_id', $branchId);
         })
         ->where('tipo_venta', 'catalogo')
@@ -168,16 +172,25 @@ class ReporteController extends Controller
         ->get()
         ->map(fn($r) => ['name' => $r->name, 'cantidad' => (int) $r->cantidad, 'total' => (float) $r->total]);
 
-        // ── GASTOS ───────────────────────────────────────────────────────────
-        $gastosQ = Gasto::whereBetween('created_at', [$fechaDesde, $fechaHasta]);
+        // Utilidad: (precio - costo) * cantidad, solo líneas con costo conocido
+        $totalUtilidad = (float) SaleDetail::whereHas('sale', function ($q) use ($fdStr, $fhStr, $branchId) {
+            $q->whereBetween('fecha_venta', [$fdStr, $fhStr])->completed();
+            if ($branchId) $q->where('branch_id', $branchId);
+        })
+        ->whereNotNull('cost')
+        ->selectRaw('SUM((price - cost) * quantity) as utilidad')
+        ->value('utilidad') ?? 0;
+
+        // ── GASTOS ─ filtrados por fecha_gasto (fecha de negocio) ────────────
+        $gastosQ = Gasto::whereBetween('fecha_gasto', [$fdStr, $fhStr]);
         if ($branchId) $gastosQ->where('branch_id', $branchId);
 
         $totalGastos   = (float) $gastosQ->sum('monto');
-        $gastosDetalle = $gastosQ->with('user')->orderBy('created_at')->get()->map(fn($g) => [
+        $gastosDetalle = $gastosQ->with('user')->orderBy('fecha_gasto')->get()->map(fn($g) => [
             'descripcion' => $g->descripcion,
             'monto'       => (float) $g->monto,
             'usuario'     => $g->user?->name,
-            'fecha'       => $g->created_at->format('d/m H:i'),
+            'fecha'       => optional($g->fecha_gasto)->format('d/m/Y') ?? $g->created_at->format('d/m/Y'),
         ]);
 
         // ── COBROS de clientes ────────────────────────────────────────────────
@@ -200,6 +213,7 @@ class ReporteController extends Controller
             'corte' => [
                 'total_ventas'    => $totalVentas,
                 'count_ventas'    => $countVentas,
+                'total_utilidad'  => $totalUtilidad,
                 'total_gastos'    => $totalGastos,
                 'total_cobros'    => $totalCobros,
                 'total_pagos'     => $totalPagos,

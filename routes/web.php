@@ -62,6 +62,25 @@ Route::middleware(['auth', 'check.branch'])->group(function () {
     // Ventas
     Route::get('/ventas', [\App\Http\Controllers\VentaController::class, 'index'])->name('ventas.index');
     Route::post('/ventas', [\App\Http\Controllers\VentaController::class, 'store'])->name('ventas.store');
+    Route::post('/ventas/{venta}/cancelar', [\App\Http\Controllers\VentaController::class, 'cancelar'])->name('ventas.cancelar');
+
+    // Caja / corte de caja
+    Route::get('/caja', [\App\Http\Controllers\CajaController::class, 'index'])->name('caja.index');
+    Route::post('/caja/abrir', [\App\Http\Controllers\CajaController::class, 'abrir'])->name('caja.abrir');
+    Route::post('/caja/{caja}/cerrar', [\App\Http\Controllers\CajaController::class, 'cerrar'])->name('caja.cerrar');
+
+    // Traspasos entre sucursales
+    Route::get('/traspasos', [\App\Http\Controllers\BranchTransferController::class, 'index'])->name('traspasos.index');
+    Route::post('/traspasos', [\App\Http\Controllers\BranchTransferController::class, 'store'])->name('traspasos.store');
+
+    // Mermas
+    Route::get('/mermas', [\App\Http\Controllers\MermaController::class, 'index'])->name('mermas.index');
+    Route::post('/mermas', [\App\Http\Controllers\MermaController::class, 'store'])->name('mermas.store');
+    Route::delete('/mermas/{merma}', [\App\Http\Controllers\MermaController::class, 'destroy'])->name('mermas.destroy');
+
+    // Pedidos recibidos (compras a proveedores)
+    Route::get('/pedidos', [\App\Http\Controllers\PedidoController::class, 'index'])->name('pedidos.index');
+    Route::post('/pedidos', [\App\Http\Controllers\PedidoController::class, 'store'])->name('pedidos.store');
 
     // Proveedores
     Route::get('/proveedores', [\App\Http\Controllers\SupplierController::class, 'index'])->name('proveedores.index');
@@ -106,6 +125,11 @@ Route::middleware(['auth', 'check.branch'])->group(function () {
 // Asistente IA — throttle:30,1 = 30 consultas/minuto por usuario para controlar costos de API
 Route::middleware(['auth', 'check.branch', 'throttle:30,1'])->group(function () {
     Route::post('/asistente', [\App\Http\Controllers\AsistenteController::class, 'consulta'])->name('asistente.consulta');
+});
+
+// Parseo IA de documentos de proveedor — throttle:10,1 = 10 por minuto (imágenes son costosas)
+Route::middleware(['auth', 'check.branch', 'throttle:10,1'])->group(function () {
+    Route::post('/pedidos/parse', [\App\Http\Controllers\PedidoController::class, 'parseDocumento'])->name('pedidos.parse');
 });
 
 // Reportes & Corte de Caja

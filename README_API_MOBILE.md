@@ -93,7 +93,7 @@ cd tlapaleria
 composer install
 
 # Instalar dependencias Node.js
-npm install
+pnpm install
 
 # Configurar base de datos
 cp .env.example .env
@@ -111,7 +111,7 @@ php artisan passport:install
 php artisan serve
 
 # Terminal 2: Vite dev server
-npm run dev
+pnpm run dev
 ```
 
 Abrir: `http://localhost:8000`
@@ -120,13 +120,13 @@ Abrir: `http://localhost:8000`
 
 ```bash
 # Compilar assets web
-npm run build
+pnpm run build
 
 # Sincronizar con Android
-npx cap sync android
+pnpm exec cap sync android
 
 # Abrir en Android Studio
-npx cap open android
+pnpm exec cap open android
 
 # En Android Studio:
 # - Conectar dispositivo o iniciar emulador
@@ -362,16 +362,16 @@ php artisan passport:client --personal
 
 ```bash
 # Sincronizar todo
-npx cap sync android
+pnpm exec cap sync android
 
 # Solo copiar assets
-npx cap copy android
+pnpm exec cap copy android
 
 # Actualizar plugins
-npx cap update android
+pnpm exec cap update android
 
 # Abrir Android Studio
-npx cap open android
+pnpm exec cap open android
 
 # Ver logs
 adb logcat | grep Capacitor
@@ -381,13 +381,13 @@ adb logcat | grep Capacitor
 
 ```bash
 # Desarrollo
-npm run dev
+pnpm run dev
 
 # Producción
-npm run build
+pnpm run build
 
 # Limpiar node_modules
-rm -rf node_modules && npm install
+rm -rf node_modules && pnpm install
 ```
 
 ---
@@ -443,7 +443,7 @@ rm -rf node_modules && npm install
 
 4. **Escáner de Código de Barras**
    ```bash
-   npm install @capacitor-community/barcode-scanner
+   pnpm add @capacitor-community/barcode-scanner
    ```
 
 5. **Modo Offline**
@@ -452,12 +452,12 @@ rm -rf node_modules && npm install
 
 6. **Notificaciones Push**
    ```bash
-   npm install @capacitor/push-notifications
+   pnpm add @capacitor/push-notifications
    ```
 
 7. **Geolocalización** (para tracking de sucursales)
    ```bash
-   npm install @capacitor/geolocation
+   pnpm add @capacitor/geolocation
    ```
 
 ### Producción

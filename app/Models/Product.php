@@ -60,11 +60,6 @@ class Product extends Model
         return $this->suppliers()->min('product_supplier.cost') ?? $this->cost ?? 0;
     }
 
-    public function inventory(): HasMany
-    {
-        return $this->hasMany(Inventory::class);
-    }
-
     /**
      * Relación con inventario por sucursal
      */

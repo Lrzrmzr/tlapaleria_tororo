@@ -36,7 +36,7 @@ class FaltanteController extends Controller
             'pedido'      => $faltante->pedido,
             'confirmado'  => $faltante->confirmado,
             'created_at'  => $faltante->created_at->format('H:i'),
-            'fecha'       => $faltante->created_at->format('d/m/Y'),
+            'fecha'       => optional($faltante->fecha_faltante)->format('d/m/Y') ?? $faltante->created_at->format('d/m/Y'),
             'user'        => $faltante->user->name,
         ])->values();
 
@@ -51,10 +51,11 @@ class FaltanteController extends Controller
         $faltantesConfirmados = (clone $statsQuery)->where('confirmado', true)->count();
 
         // Productos con stock bajo — query directa sin cargar todo el catálogo
+        $stockCritico = SystemSetting::stockCriticoThreshold();
         $productosStockBajoQuery = \App\Models\BranchInventory::where('branch_id', $branchId)
             ->with('product')
             ->get()
-            ->filter(fn($inv) => $inv->stock >= 0 && $inv->stock <= 2 && $inv->product)
+            ->filter(fn($inv) => $inv->stock >= 0 && $inv->stock <= $stockCritico && $inv->product)
             ->map(fn($inv) => [
                 'id'    => $inv->product->id,
                 'name'  => $inv->product->name,
@@ -85,11 +86,12 @@ class FaltanteController extends Controller
     public function store(StoreFaltanteRequest $request)
     {
         Faltante::create([
-            'descripcion' => $request->descripcion,
-            'pedido'      => $request->pedido,
-            'confirmado'  => $request->confirmado ?? 0,
-            'user_id'     => Auth::id(),
-            'branch_id'   => $request->user_branch_id,
+            'descripcion'    => $request->descripcion,
+            'pedido'         => $request->pedido,
+            'confirmado'     => $request->confirmado ?? 0,
+            'user_id'        => Auth::id(),
+            'branch_id'      => $request->user_branch_id,
+            'fecha_faltante' => $request->fecha_faltante ?? now()->toDateString(),
         ]);
         return redirect()->back();
     }

@@ -297,14 +297,14 @@ POST /api/login
 php artisan serve
 
 # 2. Iniciar Vite (en otra terminal)
-npm run dev
+pnpm run dev
 
 # 3. Compilar para móvil (cuando cambies código)
-npm run build
-npx cap sync android
+pnpm run build
+pnpm exec cap sync android
 
 # 4. Abrir en Android Studio
-npx cap open android
+pnpm exec cap open android
 ```
 
 ### Testing de API
@@ -328,13 +328,13 @@ curl -X GET http://localhost:8000/api/mobile/products \
 
 ```bash
 # Sincronizar todo
-npx cap sync android
+pnpm exec cap sync android
 
 # Ver logs de Android
 adb logcat | grep Capacitor
 
 # Limpiar y reconstruir
-npx cap copy android
+pnpm exec cap copy android
 ```
 
 ---
@@ -362,13 +362,13 @@ curl -X GET http://localhost:8000/api/mobile/products \
 
 ```bash
 # 1. Compilar assets
-npm run build
+pnpm run build
 
 # 2. Sincronizar
-npx cap sync android
+pnpm exec cap sync android
 
 # 3. Abrir Android Studio
-npx cap open android
+pnpm exec cap open android
 
 # 4. En Android Studio:
 #    - Conectar dispositivo o iniciar emulador

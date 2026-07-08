@@ -99,22 +99,6 @@ class BranchInventory extends Model
     }
 
     /**
-     * Agregar stock
-     */
-    public function addStock(int $quantity): void
-    {
-        $this->increment('stock', $quantity);
-    }
-
-    /**
-     * Reducir stock
-     */
-    public function reduceStock(int $quantity): void
-    {
-        $this->decrement('stock', $quantity);
-    }
-
-    /**
      * Obtener el valor total del inventario de este producto
      */
     public function getValueAttribute(): float

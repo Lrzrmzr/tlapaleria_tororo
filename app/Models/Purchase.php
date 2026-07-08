@@ -11,10 +11,16 @@ class Purchase extends Model
 {
     use SoftDeletes, LogsActivity;
 
-    protected $fillable = ['supplier_id', 'user_id', 'branch_id', 'total', 'status'];
+    protected $fillable = [
+        'supplier_id', 'user_id', 'branch_id', 'total', 'status',
+        'tipo_pago', 'numero_factura', 'numero_pedido',
+        'fecha_factura', 'fecha_vencimiento', 'notas', 'imagen_path',
+    ];
 
     protected $casts = [
-        'total' => 'decimal:2',
+        'total'             => 'decimal:2',
+        'fecha_factura'     => 'date',
+        'fecha_vencimiento' => 'date',
     ];
 
     public function supplier(): BelongsTo

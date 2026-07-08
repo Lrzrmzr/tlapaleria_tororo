@@ -7,8 +7,8 @@
 ```bash
 # Verificar que todo está instalado
 php artisan --version
-npm --version
-npx cap --version
+pnpm --version
+pnpm exec cap --version
 ```
 
 ### 2️⃣ Iniciar Servidor Laravel (30 segundos)
@@ -46,19 +46,19 @@ Si ves algo como esto, ¡funciona! ✅
 
 ```bash
 # Terminal 2
-npm run build
+pnpm run build
 ```
 
 ### 5️⃣ Sincronizar con Android (1 minuto)
 
 ```bash
-npx cap sync android
+pnpm exec cap sync android
 ```
 
 ### 6️⃣ Abrir en Android Studio (1 minuto)
 
 ```bash
-npx cap open android
+pnpm exec cap open android
 ```
 
 En Android Studio:
@@ -191,7 +191,7 @@ Antes de compilar para Android, prueba en el navegador:
 php artisan serve
 
 # Terminal 2: Vite
-npm run dev
+pnpm run dev
 ```
 
 Abre: `http://localhost:8000/mobile/login`
@@ -206,7 +206,7 @@ Abre: `http://localhost:8000/mobile/login`
 php artisan serve
 
 # Iniciar Vite (hot reload)
-npm run dev
+pnpm run dev
 
 # Ver rutas
 php artisan route:list
@@ -215,16 +215,16 @@ php artisan route:list
 ### Desarrollo Móvil
 ```bash
 # Compilar assets
-npm run build
+pnpm run build
 
 # Sincronizar con Android
-npx cap sync android
+pnpm exec cap sync android
 
 # Solo copiar assets (más rápido)
-npx cap copy android
+pnpm exec cap copy android
 
 # Abrir Android Studio
-npx cap open android
+pnpm exec cap open android
 
 # Ver logs de la app
 adb logcat | grep -i capacitor
@@ -239,7 +239,7 @@ php artisan route:clear
 
 # Limpiar node_modules (si hay problemas)
 rm -rf node_modules package-lock.json
-npm install
+pnpm install
 
 # Ver errores de Laravel
 tail -f storage/logs/laravel.log
@@ -332,8 +332,8 @@ En Android Studio:
 
 5. **Sincronizar de nuevo**:
    ```bash
-   npm run build
-   npx cap sync android
+   pnpm run build
+   pnpm exec cap sync android
    ```
 
 ---
@@ -345,13 +345,13 @@ En Android Studio:
 ```
 1. Desarrollar en el navegador (más rápido)
    ↓
-2. npm run dev (hot reload)
+2. pnpm run dev (hot reload)
    ↓
 3. Probar funcionalidad
    ↓
 4. Cuando esté listo:
-   npm run build
-   npx cap copy android
+   pnpm run build
+   pnpm exec cap copy android
    ↓
 5. Probar en Android Studio
    ↓
@@ -362,14 +362,14 @@ En Android Studio:
 
 ```bash
 # No necesitas rebuild completo
-npm run build && npx cap copy android
+pnpm run build && pnpm exec cap copy android
 ```
 
 ### Para Cambios de Plugins Capacitor
 
 ```bash
 # Necesitas sync completo
-npx cap sync android
+pnpm exec cap sync android
 ```
 
 ---
@@ -388,8 +388,8 @@ curl http://localhost:8000/api/me
 ### "La app no se actualiza"
 ```bash
 # Limpiar todo y reconstruir
-npm run build
-npx cap sync android
+pnpm run build
+pnpm exec cap sync android
 # Luego en Android Studio: Build → Clean Project
 ```
 
@@ -416,8 +416,8 @@ Para más detalles, consulta:
 ## 💡 Tips
 
 1. **Siempre prueba en el navegador primero** - Es más rápido
-2. **Usa `npm run dev` para desarrollo** - Hot reload automático
-3. **Solo usa `npm run build` cuando vayas a probar en móvil**
+2. **Usa `pnpm run dev` para desarrollo** - Hot reload automático
+3. **Solo usa `pnpm run build` cuando vayas a probar en móvil**
 4. **Guarda el token después del login** - Para no tener que loguearte cada vez
 5. **Usa Chrome DevTools para debug** - chrome://inspect cuando la app está corriendo
 
@@ -427,7 +427,7 @@ Para más detalles, consulta:
 
 - [ ] Laravel corriendo en http://localhost:8000
 - [ ] Probaste el login con curl
-- [ ] npm run build completado
+- [ ] pnpm run build completado
 - [ ] Android Studio abierto
 - [ ] Dispositivo/emulador conectado
 - [ ] App instalada y corriendo

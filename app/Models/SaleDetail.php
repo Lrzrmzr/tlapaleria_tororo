@@ -12,15 +12,29 @@ class SaleDetail extends Model
         'descripcion', // Para ventas libres
         'quantity',
         'price',
+        'cost',
         'subtotal',
         'total'
     ];
 
     protected $casts = [
         'price' => 'decimal:2',
+        'cost' => 'decimal:2',
         'subtotal' => 'decimal:2',
         'total' => 'decimal:2',
     ];
+
+    /**
+     * Utilidad de la línea: (precio - costo) * cantidad.
+     * Null si no se conoce el costo (ventas libres o registradas antes de este cambio).
+     */
+    public function getUtilidadAttribute(): ?float
+    {
+        if ($this->cost === null) {
+            return null;
+        }
+        return (float) (($this->price - $this->cost) * $this->quantity);
+    }
 
     /**
      * Relación con la venta

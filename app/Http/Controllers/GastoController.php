@@ -24,6 +24,7 @@ class GastoController extends Controller
                 'descripcion' => $gasto->descripcion,
                 'monto'       => $gasto->monto,
                 'created_at'  => $gasto->created_at->toISOString(),
+                'fecha_gasto' => optional($gasto->fecha_gasto)->toDateString(),
                 'user'        => $gasto->user ? [
                     'id'   => $gasto->user->id,
                     'name' => $gasto->user->name,
@@ -50,6 +51,7 @@ class GastoController extends Controller
             'monto'       => $request->monto,
             'user_id'     => Auth::id(),
             'branch_id'   => $request->user_branch_id,
+            'fecha_gasto' => $request->fecha_gasto ?? now()->toDateString(),
         ]);
         return redirect()->back();
     }

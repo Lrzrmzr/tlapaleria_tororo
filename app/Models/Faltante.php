@@ -10,10 +10,11 @@ class Faltante extends Model
 {
     use SoftDeletes, LogsActivity;
 
-    protected $fillable = ['descripcion', 'pedido', 'user_id', 'branch_id', 'confirmado', 'product_id', 'quantity', 'notes'];
+    protected $fillable = ['descripcion', 'pedido', 'user_id', 'branch_id', 'confirmado', 'product_id', 'quantity', 'notes', 'fecha_faltante'];
 
     protected $casts = [
         'confirmado' => 'boolean',
+        'fecha_faltante' => 'date',
     ];
 
     public function user(): BelongsTo
