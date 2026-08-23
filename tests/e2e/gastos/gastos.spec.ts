@@ -22,6 +22,12 @@ test.describe.serial('Gastos', () => {
     await form.getByPlaceholder('Ej: Compra de material de oficina').fill(DESC);
     await form.locator('input[type="number"]').fill('350.00');
 
+    // root no tiene sucursal propia: el formulario exige elegir una explícitamente.
+    const branchSelect = form.locator('select');
+    if (await branchSelect.isVisible().catch(() => false)) {
+      await branchSelect.selectOption({ index: 1 });
+    }
+
     await form.getByRole('button', { name: 'Guardar Gasto' }).click();
 
     // El formulario se oculta y la descripción aparece en la tabla

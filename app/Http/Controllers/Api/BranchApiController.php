@@ -40,9 +40,10 @@ class BranchApiController extends Controller
     /**
      * Obtener una sucursal específica
      */
-    public function show($id)
+    public function show(int $id)
     {
         $branch = Branch::findOrFail($id);
+        $this->authorize('view', $branch);
 
         return response()->json([
             'success' => true,
@@ -53,17 +54,10 @@ class BranchApiController extends Controller
     /**
      * Obtener estadísticas de una sucursal
      */
-    public function stats($id, Request $request)
+    public function stats(int $id)
     {
-        $user = $request->user();
-        if (!$user->isRoot() && (int) $id !== (int) $user->branch_id) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Solo puedes consultar estadísticas de tu propia sucursal.'
-            ], 403);
-        }
-
         $branch = Branch::findOrFail($id);
+        $this->authorize('view', $branch);
 
         // Contar inventarios
         $totalInventarios = $branch->inventories()->count();
@@ -80,7 +74,7 @@ class BranchApiController extends Controller
             ->count();
 
         // Total de ventas del día
-        $ventasHoy = $branch->ventas()
+        $ventasHoy = $branch->sales()
             ->whereDate('created_at', today())
             ->sum('total');
 
@@ -88,11 +82,11 @@ class BranchApiController extends Controller
         $gastosDelMes = $branch->gastos()
             ->whereYear('created_at', now()->year)
             ->whereMonth('created_at', now()->month)
-            ->sum('total');
+            ->sum('monto');
 
-        // Faltantes pendientes
+        // Faltantes pendientes (no confirmados)
         $faltantesPendientes = $branch->faltantes()
-            ->where('status', 'pendiente')
+            ->where('confirmado', false)
             ->count();
 
         return response()->json([

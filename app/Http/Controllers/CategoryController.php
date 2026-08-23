@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Models\Category;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
@@ -77,7 +76,7 @@ class CategoryController extends Controller
      */
     public function store(Request $request)
     {
-        $this->authorizeAdminOrRoot();
+        $this->authorize('manage', Category::class);
 
         $validated = $request->validate([
             'name' => 'required|string|max:100|unique:categories,name',
@@ -115,7 +114,7 @@ class CategoryController extends Controller
      */
     public function update(Request $request, $id)
     {
-        $this->authorizeAdminOrRoot();
+        $this->authorize('manage', Category::class);
 
         $category = Category::findOrFail($id);
 
@@ -156,7 +155,7 @@ class CategoryController extends Controller
      */
     public function destroy($id)
     {
-        $this->authorizeAdminOrRoot();
+        $this->authorize('manage', Category::class);
 
         $category = Category::findOrFail($id);
 
@@ -192,7 +191,7 @@ class CategoryController extends Controller
      */
     public function reorder(Request $request)
     {
-        $this->authorizeAdminOrRoot();
+        $this->authorize('manage', Category::class);
 
         $validated = $request->validate([
             'categories' => 'required|array',
@@ -209,11 +208,4 @@ class CategoryController extends Controller
         ]);
     }
 
-    private function authorizeAdminOrRoot(): void
-    {
-        $user = Auth::user();
-        if (!$user || (!$user->isRoot() && !$user->isBranchAdmin())) {
-            abort(403, 'Solo administradores pueden gestionar categorías.');
-        }
-    }
 }

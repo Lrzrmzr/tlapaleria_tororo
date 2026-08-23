@@ -1,20 +1,23 @@
 <?php
 namespace App\Http\Controllers;
 
+use App\Models\Branch;
 use App\Models\Sale;
-use App\Models\SaleDetail;
 use App\Models\Product;
-use App\Models\BranchInventory;
-use App\Models\InventoryMovement;
 use App\Models\SystemSetting;
+use App\Services\VentaService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Carbon\Carbon;
+use RuntimeException;
 
 class VentaController extends Controller
 {
+    public function __construct(private VentaService $ventaService)
+    {
+    }
+
     public function index(Request $request)
     {
         $branchId   = $request->user_branch_id;
@@ -88,6 +91,10 @@ class VentaController extends Controller
             'ventas'                  => $ventas,
             'productos'               => $productos,
             'user'                    => $user,
+            'isRoot'                  => $isRoot,
+            // Root no tiene sucursal propia: debe elegir una para registrar
+            // ventas en efectivo (VentaService las exige con sucursal resuelta).
+            'branches'                => $isRoot ? Branch::where('active', true)->orderBy('name')->get(['id', 'name']) : collect(),
             'ventasLibresHabilitadas' => SystemSetting::ventasLibresHabilitadas(),
             'filters'                 => [
                 'fecha_desde' => $fechaDesde,
@@ -99,61 +106,34 @@ class VentaController extends Controller
 
     public function store(Request $request)
     {
-        // Detectar tipo de venta
         if ($request->has('items')) {
             return $this->storeCatalogoVenta($request);
-        } else {
-            return $this->storeLibreVenta($request);
         }
+
+        return $this->storeLibreVenta($request);
     }
 
     private function storeLibreVenta(Request $request)
     {
-        if (!SystemSetting::ventasLibresHabilitadas()) {
-            return redirect()->back()->withErrors(['error' => 'Las ventas libres están deshabilitadas.']);
-        }
+        $isRoot = $request->is_root ?? false;
 
-        $request->validate([
+        $data = $request->validate([
             'descripcion'      => 'required|string|max:255',
             'total'            => 'required|numeric|min:0.01',
             'metodo_pago'      => 'nullable|in:efectivo,tarjeta,transferencia',
             'fecha_venta'      => 'nullable|date',
             'idempotency_key'  => 'nullable|string|max:64',
+            'branch_id'        => $isRoot ? 'nullable|exists:branches,id' : 'nullable',
         ]);
 
-        // Idempotencia: si ya existe una venta con esta clave, devolver sin duplicar
-        if ($request->idempotency_key) {
-            $existing = Sale::where('idempotency_key', $request->idempotency_key)->first();
-            if ($existing) {
-                return redirect()->back()->with('success', 'Venta ya registrada.');
-            }
+        // Sin sucursal propia, root debe elegir una explícitamente (selector en Ventas/Index.vue).
+        $branchId = $isRoot ? ($data['branch_id'] ?? null) : $request->user_branch_id;
+
+        try {
+            $this->ventaService->registrarLibre($data, $branchId, Auth::id());
+        } catch (\Throwable $e) {
+            return $this->friendlyError($e);
         }
-
-        $totalVenta = $request->total;
-
-        $venta = Sale::create([
-            'user_id'          => Auth::id(),
-            'branch_id'        => $request->user_branch_id,
-            'customer_id'      => null,
-            'total'            => $totalVenta,
-            'status'           => 'completed',
-            'metodo_pago'      => $request->metodo_pago ?? 'efectivo',
-            'fecha_venta'      => $request->fecha_venta ?? now()->toDateString(),
-            'idempotency_key'  => $request->idempotency_key,
-        ]);
-
-        // Crear el detalle de venta LIBRE (sin producto, sin costo conocido)
-        SaleDetail::create([
-            'sale_id' => $venta->id,
-            'product_id' => null,
-            'tipo_venta' => 'libre',
-            'descripcion' => $request->descripcion,
-            'quantity' => 1,
-            'price' => $request->total,
-            'cost' => null,
-            'subtotal' => $request->total,
-            'total' => $request->total
-        ]);
 
         return redirect()->back()->with('success', 'Venta libre registrada correctamente');
     }
@@ -169,99 +149,20 @@ class VentaController extends Controller
             'idempotency_key'        => 'nullable|string|max:64',
         ]);
 
-        // Idempotencia: si ya existe una venta con esta clave, devolver sin duplicar
-        if (!empty($validated['idempotency_key'])) {
-            $existing = Sale::where('idempotency_key', $validated['idempotency_key'])->first();
-            if ($existing) {
-                return redirect()->back()->with('success', 'Venta ya registrada.');
-            }
-        }
-
-        $branchId = $request->user_branch_id;
-
-        DB::beginTransaction();
-
         try {
-            // Pre-cargar todos los productos e inventarios en bulk (evita N+1)
-            $productIds = collect($validated['items'])->pluck('product_id')->unique();
-            $products   = Product::whereIn('id', $productIds)->get()->keyBy('id');
-
-            // Root user (branch_id=null): buscar el inventario con más stock por producto
-            $invQuery = BranchInventory::whereIn('product_id', $productIds);
-            if ($branchId) {
-                $invQuery->where('branch_id', $branchId);
-            } else {
-                $invQuery->orderByDesc('stock');
-            }
-            // unique('product_id') conserva el primer registro por producto (el de mayor stock para root)
-            $inventories = $invQuery->get()->unique('product_id')->keyBy('product_id');
-
-            // Determinar la sucursal efectiva para la venta
-            $effectiveBranchId = $branchId ?? $inventories->first()?->branch_id;
-
-            // Validar stock y calcular total con precios del servidor
-            $totalVenta = 0;
-            foreach ($validated['items'] as $item) {
-                $product   = $products->get($item['product_id']);
-                $inventory = $inventories->get($item['product_id']);
-
-                if (!$inventory) {
-                    throw new \Exception("El producto {$product->name} no tiene inventario en esta sucursal.");
-                }
-                if ($inventory->stock < $item['quantity']) {
-                    throw new \Exception("Stock insuficiente para {$product->name}. Disponible: {$inventory->stock}");
-                }
-
-                // Precio siempre del servidor, nunca del cliente
-                $totalVenta += $product->price * $item['quantity'];
-            }
-
-            $venta = Sale::create([
-                'user_id'          => Auth::id(),
-                'branch_id'        => $effectiveBranchId,
-                'customer_id'      => null,
-                'total'            => $totalVenta,
-                'status'           => 'completed',
-                'metodo_pago'      => $validated['metodo_pago'] ?? 'efectivo',
-                'fecha_venta'      => $validated['fecha_venta'] ?? now()->toDateString(),
-                'idempotency_key'  => $validated['idempotency_key'] ?? null,
-            ]);
-
-            foreach ($validated['items'] as $item) {
-                $product   = $products->get($item['product_id']);
-                $inventory = $inventories->get($item['product_id']);
-                $subtotal  = $product->price * $item['quantity'];
-
-                SaleDetail::create([
-                    'sale_id'     => $venta->id,
-                    'product_id'  => $product->id,
-                    'tipo_venta'  => 'catalogo',
-                    'descripcion' => $product->name,
-                    'quantity'    => $item['quantity'],
-                    'price'       => $product->price,
-                    'cost'        => $inventory->cost, // costo al momento de la venta, para calcular utilidad
-                    'subtotal'    => $subtotal,
-                    'total'       => $subtotal,
-                ]);
-
-                // Salida de inventario atómica + registro en el kardex
-                InventoryMovement::aplicar(
-                    $inventory,
-                    'salida',
-                    -$item['quantity'],
-                    'Venta #' . $venta->id,
-                    $venta,
-                    Auth::id()
-                );
-            }
-
-            DB::commit();
-            return redirect()->back()->with('success', 'Venta registrada correctamente. Inventario actualizado.');
-
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return redirect()->back()->withErrors(['error' => $e->getMessage()]);
+            $this->ventaService->registrarCatalogo(
+                $validated['items'],
+                $validated['metodo_pago'] ?? null,
+                $validated['fecha_venta'] ?? null,
+                $validated['idempotency_key'] ?? null,
+                $request->user_branch_id,
+                Auth::id()
+            );
+        } catch (\Throwable $e) {
+            return $this->friendlyError($e);
         }
+
+        return redirect()->back()->with('success', 'Venta registrada correctamente. Inventario actualizado.');
     }
 
     /**
@@ -269,57 +170,33 @@ class VentaController extends Controller
      */
     public function cancelar(Request $request, Sale $venta)
     {
-        $isRoot   = $request->is_root ?? false;
-        $branchId = $request->user_branch_id;
-
-        if (!$isRoot && $venta->branch_id !== $branchId) {
-            abort(403, 'No tienes acceso a ventas de otra sucursal.');
-        }
-
-        if ($venta->status === 'cancelled') {
-            return redirect()->back()->withErrors(['error' => 'Esta venta ya está cancelada.']);
-        }
+        $this->authorize('cancelar', $venta);
 
         $request->validate([
             'motivo' => 'required|string|max:255',
         ]);
 
-        DB::beginTransaction();
         try {
-            foreach ($venta->saleDetails as $detail) {
-                if ($detail->tipo_venta !== 'catalogo' || !$detail->product_id) {
-                    continue;
-                }
-
-                $inventory = BranchInventory::where('branch_id', $venta->branch_id)
-                    ->where('product_id', $detail->product_id)
-                    ->first();
-
-                if ($inventory) {
-                    InventoryMovement::aplicar(
-                        $inventory,
-                        'devolucion',
-                        $detail->quantity,
-                        'Cancelación de venta #' . $venta->id,
-                        $venta,
-                        Auth::id()
-                    );
-                }
-            }
-
-            $venta->update([
-                'status'        => 'cancelled',
-                'cancelled_by'  => Auth::id(),
-                'cancelled_at'  => now(),
-                'cancel_reason' => $request->motivo,
-            ]);
-
-            DB::commit();
-            return redirect()->back()->with('success', 'Venta cancelada. El inventario fue restituido.');
-
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return redirect()->back()->withErrors(['error' => 'Error al cancelar la venta: ' . $e->getMessage()]);
+            $this->ventaService->cancelar($venta, $request->motivo, Auth::id());
+        } catch (\Throwable $e) {
+            return $this->friendlyError($e);
         }
+
+        return redirect()->back()->with('success', 'Venta cancelada. El inventario fue restituido.');
+    }
+
+    /**
+     * Errores de negocio esperados (RuntimeException) muestran su mensaje tal cual;
+     * cualquier otra falla se reporta y muestra un mensaje genérico — el checkout
+     * es el flujo de mayor tráfico del sistema, no debe romper con un 500 crudo.
+     */
+    private function friendlyError(\Throwable $e)
+    {
+        if ($e instanceof RuntimeException) {
+            return redirect()->back()->withErrors(['error' => $e->getMessage()]);
+        }
+
+        report($e);
+        return redirect()->back()->withErrors(['error' => 'Ocurrió un error inesperado al procesar la venta. Intenta de nuevo.']);
     }
 }

@@ -2,18 +2,26 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreGastoRequest;
+use App\Models\Branch;
 use App\Models\Gasto;
+use App\Services\GastoService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
+use RuntimeException;
 
 class GastoController extends Controller
 {
+    public function __construct(private GastoService $gastoService)
+    {
+    }
+
     public function index(Request $request)
     {
+        $isRoot = $request->is_root ?? false;
         $query = Gasto::with('user');
 
-        if (!($request->is_root ?? false)) {
+        if (!$isRoot) {
             $query->where('branch_id', $request->user_branch_id);
         }
 
@@ -35,6 +43,10 @@ class GastoController extends Controller
 
         return Inertia::render('Gastos/Index', [
             'gastos' => $gastos,
+            'isRoot' => $isRoot,
+            // Root no tiene sucursal propia: debe elegir una para registrar
+            // gastos (GastoService los exige con sucursal resuelta, siempre en efectivo).
+            'branches' => $isRoot ? Branch::where('active', true)->orderBy('name')->get(['id', 'name']) : collect(),
             'user' => [
                 'id' => $user->id,
                 'name' => $user->name,
@@ -46,19 +58,30 @@ class GastoController extends Controller
 
     public function store(StoreGastoRequest $request)
     {
-        Gasto::create([
-            'descripcion' => $request->descripcion,
-            'monto'       => $request->monto,
-            'user_id'     => Auth::id(),
-            'branch_id'   => $request->user_branch_id,
-            'fecha_gasto' => $request->fecha_gasto ?? now()->toDateString(),
-        ]);
+        $isRoot = $request->is_root ?? false;
+
+        if ($isRoot) {
+            $request->validate(['branch_id' => 'nullable|exists:branches,id']);
+        }
+
+        $branchId = $isRoot ? $request->branch_id : $request->user_branch_id;
+
+        try {
+            $this->gastoService->registrar(
+                $request->validated() + ['fecha_gasto' => $request->fecha_gasto],
+                $branchId,
+                Auth::id()
+            );
+        } catch (RuntimeException $e) {
+            return redirect()->back()->withErrors(['error' => $e->getMessage()]);
+        }
+
         return redirect()->back();
     }
 
     public function update(Request $request, Gasto $gasto)
     {
-        $this->authorizeBranch($gasto->branch_id, $request);
+        $this->authorize('update', $gasto);
 
         $request->validate([
             'descripcion' => 'required|string|max:255',
@@ -75,24 +98,9 @@ class GastoController extends Controller
 
     public function destroy(Gasto $gasto)
     {
-        $user     = Auth::user();
-        $userRole = $user->roles->first();
-
-        if (!$userRole || !in_array($userRole->name, ['administrador', 'root'])) {
-            abort(403, 'Solo el administrador puede eliminar gastos.');
-        }
-
-        $this->authorizeBranch($gasto->branch_id, request());
+        $this->authorize('delete', $gasto);
 
         $gasto->delete();
         return redirect()->back();
-    }
-
-    private function authorizeBranch(?int $resourceBranchId, \Illuminate\Http\Request $request): void
-    {
-        $isRoot = $request->is_root ?? false;
-        if (!$isRoot && $resourceBranchId !== $request->user_branch_id) {
-            abort(403, 'No tienes acceso a datos de otra sucursal.');
-        }
     }
 }

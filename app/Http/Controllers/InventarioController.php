@@ -3,16 +3,21 @@
 namespace App\Http\Controllers;
 
 use App\Models\BranchInventory;
-use App\Models\InventoryMovement;
 use App\Models\Product;
 use App\Models\Branch;
 use App\Models\SystemSetting;
+use App\Services\InventarioService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
+use RuntimeException;
 
 class InventarioController extends Controller
 {
+    public function __construct(private InventarioService $inventarioService)
+    {
+    }
+
     public function index(Request $request)
     {
         $userBranchId = $request->user_branch_id; // Inyectado por middleware
@@ -190,36 +195,29 @@ class InventarioController extends Controller
             'cost' => 'nullable|numeric|min:0',
         ]);
 
-        // Determinar la sucursal
         $branchId = $isRoot ? $request->branch_id : $userBranchId;
 
-        // Validar que no exista ya este producto en esta sucursal
-        $exists = BranchInventory::where('branch_id', $branchId)
-            ->where('product_id', $request->product_id)
-            ->exists();
+        $this->authorize('create', [BranchInventory::class, (int) $branchId]);
 
-        if ($exists) {
-            return redirect()->back()->withErrors([
-                'error' => 'Este producto ya tiene inventario en la sucursal seleccionada.'
+        try {
+            $this->inventarioService->crear([
+                'branch_id'  => $branchId,
+                'product_id' => $request->product_id,
+                'quantity'   => $request->quantity,
+                'min_stock'  => $request->min_stock,
+                'max_stock'  => $request->max_stock,
+                'cost'       => $request->cost,
             ]);
+        } catch (RuntimeException $e) {
+            return redirect()->back()->withErrors(['error' => $e->getMessage()]);
         }
-
-        BranchInventory::create([
-            'branch_id' => $branchId,
-            'product_id' => $request->product_id,
-            'stock' => $request->quantity,
-            'min_stock' => $request->min_stock,
-            'max_stock' => $request->max_stock ?? 0,
-            'cost' => $request->cost ?? 0,
-        ]);
 
         return redirect()->back()->with('success', 'Inventario creado correctamente');
     }
 
-    public function update(Request $request, $id)
+    public function update(Request $request, BranchInventory $inventario)
     {
-        $inventario = BranchInventory::findOrFail($id);
-        $this->authorizeBranch($inventario->branch_id, $request);
+        $this->authorize('update', $inventario);
 
         $request->validate([
             'quantity'  => 'required|integer|min:0',
@@ -228,20 +226,19 @@ class InventarioController extends Controller
             'cost'      => 'nullable|numeric|min:0',
         ]);
 
-        $inventario->update([
-            'stock'     => $request->quantity,
+        $this->inventarioService->actualizar($inventario, [
+            'quantity'  => $request->quantity,
             'min_stock' => $request->min_stock,
-            'max_stock' => $request->max_stock ?? 0,
-            'cost'      => $request->cost ?? 0,
-        ]);
+            'max_stock' => $request->max_stock,
+            'cost'      => $request->cost,
+        ], Auth::id());
 
         return redirect()->back()->with('success', 'Inventario actualizado correctamente');
     }
 
-    public function ajustarStock(Request $request, $id)
+    public function ajustarStock(Request $request, BranchInventory $inventario)
     {
-        $inventario = BranchInventory::findOrFail($id);
-        $this->authorizeBranch($inventario->branch_id, $request);
+        $this->authorize('update', $inventario);
 
         $request->validate([
             'cantidad' => 'required|integer|min:1',
@@ -249,39 +246,21 @@ class InventarioController extends Controller
             'motivo'   => 'nullable|string|max:255',
         ]);
 
-        $delta = $request->tipo === 'entrada' ? $request->cantidad : -$request->cantidad;
-
         try {
-            InventoryMovement::aplicar(
-                $inventario,
-                'ajuste',
-                $delta,
-                $request->motivo ?? 'Ajuste manual de inventario',
-                null,
-                Auth::id()
-            );
-        } catch (\RuntimeException $e) {
+            $this->inventarioService->ajustarStock($inventario, $request->cantidad, $request->tipo, $request->motivo, Auth::id());
+        } catch (RuntimeException $e) {
             return redirect()->back()->withErrors(['error' => $e->getMessage()]);
         }
 
         return redirect()->back()->with('success', 'Stock ajustado correctamente');
     }
 
-    public function destroy($id)
+    public function destroy(BranchInventory $inventario)
     {
-        $inventario = BranchInventory::findOrFail($id);
-        $this->authorizeBranch($inventario->branch_id, request());
+        $this->authorize('delete', $inventario);
 
         $inventario->delete();
         return redirect()->back()->with('success', 'Inventario eliminado correctamente');
-    }
-
-    private function authorizeBranch(?int $branchId, \Illuminate\Http\Request $request): void
-    {
-        $isRoot = $request->is_root ?? false;
-        if (!$isRoot && $branchId !== $request->user_branch_id) {
-            abort(403, 'No tienes acceso a datos de otra sucursal.');
-        }
     }
 
     private function getStockStatus($quantity, $minStock, $maxStock = 0)

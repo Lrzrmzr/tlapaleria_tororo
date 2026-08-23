@@ -22,8 +22,14 @@ const fmt = (n) => new Intl.NumberFormat('es-MX', { style: 'currency', currency:
 const showAbrir = ref(false);
 const showCerrar = ref(false);
 
-const formAbrir = useForm({ fondo_inicial: 0 });
+const formAbrir = useForm({ fondo_inicial: 0, branch_id: '' });
 const formCerrar = useForm({ efectivo_contado: 0, notas: '' });
+
+function openAbrirModal() {
+    // Preseleccionar la sucursal que root ya tiene filtrada, si eligió una.
+    formAbrir.branch_id = props.isRoot ? (branchId.value || '') : '';
+    showAbrir.value = true;
+}
 
 function abrirCaja() {
     formAbrir.post(route('caja.abrir'), {
@@ -82,7 +88,7 @@ function cerrarCaja() {
 
             <div v-else class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 mb-6 text-center">
                 <p class="text-gray-500 dark:text-gray-400 mb-4">No hay un turno de caja abierto.</p>
-                <button @click="showAbrir = true" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg">
+                <button @click="openAbrirModal" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg">
                     Abrir turno
                 </button>
             </div>
@@ -129,11 +135,18 @@ function cerrarCaja() {
             <div v-if="showAbrir" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" @click.self="showAbrir = false">
                 <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-sm p-6">
                     <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-4">Abrir turno de caja</h3>
+                    <template v-if="isRoot">
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Sucursal</label>
+                        <select v-model="formAbrir.branch_id" class="w-full text-sm rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white mb-4">
+                            <option value="" disabled>Selecciona una sucursal</option>
+                            <option v-for="b in branches" :key="b.id" :value="b.id">{{ b.name }}</option>
+                        </select>
+                    </template>
                     <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Fondo inicial</label>
                     <input v-model.number="formAbrir.fondo_inicial" type="number" min="0" step="0.01" class="w-full text-sm rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white mb-4" />
                     <div class="flex justify-end gap-2">
                         <button @click="showAbrir = false" class="px-4 py-2 text-sm bg-gray-100 dark:bg-gray-700 rounded-lg">Cancelar</button>
-                        <button @click="abrirCaja" :disabled="formAbrir.processing" class="px-4 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg disabled:opacity-50">Abrir</button>
+                        <button @click="abrirCaja" :disabled="formAbrir.processing || (isRoot && !formAbrir.branch_id)" class="px-4 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg disabled:opacity-50">Abrir</button>
                     </div>
                 </div>
             </div>

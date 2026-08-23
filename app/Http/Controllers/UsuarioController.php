@@ -13,11 +13,12 @@ class UsuarioController extends Controller
     public function index()
     {
         $currentUser = User::with('roles')->find(Auth::id());
-        if (!$currentUser->isRoot() && !$currentUser->isBranchAdmin()) {
-            abort(403, 'Solo administradores pueden gestionar usuarios.');
-        }
+        $this->authorize('viewAny', User::class);
+        $isRoot = $currentUser->isRoot();
 
-        $usuarios = User::with(['roles', 'branch'])->get()->map(function ($usuario) {
+        $usuarios = User::with(['roles', 'branch'])
+            ->when(!$isRoot, fn ($q) => $q->where('branch_id', $currentUser->branch_id))
+            ->get()->map(function ($usuario) {
             $primerRol = $usuario->roles->first();
             return [
                 'id' => $usuario->id,
@@ -40,14 +41,15 @@ class UsuarioController extends Controller
 
         $roles = Role::all();
         $branches = Branch::where('active', true)->orderBy('name')->get();
-        $user = User::with('roles')->find(Auth::id());
+        $user = $currentUser;
         $userRole = $user->roles->first();
 
-        // Estadísticas
-        $totalUsuarios = User::count();
-        $usuariosConRol = User::has('roles')->count();
-        $usuariosSinRol = User::doesntHave('roles')->count();
-        $usuariosVerificados = User::whereNotNull('email_verified_at')->count();
+        // Estadísticas — acotadas a la sucursal para un administrador no-root
+        $statsScope = fn () => User::when(!$isRoot, fn ($q) => $q->where('branch_id', $currentUser->branch_id));
+        $totalUsuarios = $statsScope()->count();
+        $usuariosConRol = $statsScope()->has('roles')->count();
+        $usuariosSinRol = $statsScope()->doesntHave('roles')->count();
+        $usuariosVerificados = $statsScope()->whereNotNull('email_verified_at')->count();
 
         return Inertia::render('Usuarios/Index', [
             'usuarios' => $usuarios,
@@ -74,10 +76,7 @@ class UsuarioController extends Controller
     public function store(Request $request)
     {
         $currentUser = User::with('roles')->find(Auth::id());
-
-        if (!$currentUser->isRoot() && !$currentUser->isBranchAdmin()) {
-            abort(403, 'Solo administradores pueden crear usuarios.');
-        }
+        $this->authorize('create', User::class);
 
         $validated = $request->validate([
             'name'                  => 'required|string|max:255',
@@ -119,27 +118,23 @@ class UsuarioController extends Controller
     {
         $currentUser = User::with('roles')->find(Auth::id());
 
-        if (!$currentUser->isRoot() && !$currentUser->isBranchAdmin()) {
-            abort(403, 'Solo el administrador puede asignar roles.');
-        }
-
         $request->validate([
             'usuario_id' => 'required|exists:users,id',
             'rol_id'     => 'nullable|exists:roles,id',
         ]);
+
+        $usuario = User::findOrFail($request->usuario_id);
+
+        // Un administrador de sucursal solo puede asignar roles a usuarios de
+        // su propia sucursal, y nunca a un usuario root (evita que un admin
+        // comprometido en una sucursal escale privilegios en otra sucursal).
+        $this->authorize('assignRole', [User::class, $usuario]);
 
         $rolRoot = Role::where('name', 'root')->first();
 
         // Solo root puede asignar el rol root
         if ($request->rol_id && $rolRoot && $request->rol_id == $rolRoot->id && !$currentUser->isRoot()) {
             abort(403, 'No puedes asignar el rol root.');
-        }
-
-        $usuario = User::findOrFail($request->usuario_id);
-
-        // Administradores no pueden modificar a usuarios root
-        if (!$currentUser->isRoot() && $usuario->isRoot()) {
-            abort(403, 'No puedes modificar el rol de un usuario root.');
         }
 
         $usuario->roles()->detach();
@@ -155,10 +150,9 @@ class UsuarioController extends Controller
     {
         $currentUser = User::with('roles')->find(Auth::id());
 
-        // Solo root o administrador pueden asignar sucursales
-        if (!$currentUser->isRoot() && !$currentUser->isBranchAdmin()) {
-            abort(403, 'No tienes permisos para asignar sucursales');
-        }
+        // Misma regla de alcance que asignarRol: un admin de sucursal solo
+        // puede reasignar usuarios sin sucursal o ya asignados a la suya.
+        $this->authorize('assignBranch', [User::class, $user]);
 
         $request->validate([
             'branch_id' => 'nullable|exists:branches,id'
@@ -170,17 +164,17 @@ class UsuarioController extends Controller
         if ($branchId) {
             $branch = Branch::findOrFail($branchId);
 
-            // Verificar si el usuario que se está asignando es administrador (ID=2)
+            // Verificar si el usuario que se está asignando es administrador
             $userRoles = $user->roles;
-            $isAdminRole = $userRoles->contains('id', 2) || $userRoles->contains('name', 'administrador');
+            $isAdminRole = $userRoles->contains('name', 'administrador');
 
             if ($isAdminRole) {
                 // Verificar que la sucursal no tenga ya un administrador
-                // Buscar usuarios de esta sucursal que tengan el rol de administrador (ID=2)
+                $adminRoleId = Role::where('name', 'administrador')->value('id');
                 $existingAdmin = User::where('users.branch_id', $branchId)
                     ->where('users.id', '!=', $user->id)
                     ->join('role_user', 'users.id', '=', 'role_user.user_id')
-                    ->where('role_user.role_id', 2)
+                    ->where('role_user.role_id', $adminRoleId)
                     ->select('users.*')
                     ->first();
 

@@ -78,6 +78,13 @@ test.describe('Ventas', () => {
     await modal.locator('textarea').fill('Clavos y tornillos - test E2E');
     await modal.locator('input[type="number"]').fill('250.00');
 
+    // root no tiene sucursal propia: el modal exige elegir una explícitamente
+    // (segundo <select> del modal — el primero es método de pago).
+    const branchSelect = modal.locator('select').nth(1);
+    if (await branchSelect.isVisible().catch(() => false)) {
+      await branchSelect.selectOption({ index: 1 });
+    }
+
     await modal.getByRole('button', { name: 'Guardar Venta' }).click();
     await expect(modal).not.toBeVisible({ timeout: 8_000 });
 

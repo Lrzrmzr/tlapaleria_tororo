@@ -98,7 +98,7 @@ class FaltanteController extends Controller
 
     public function update(Request $request, Faltante $faltante)
     {
-        $this->authorizeBranch($faltante->branch_id, $request);
+        $this->authorize('update', $faltante);
 
         $request->validate([
             'descripcion' => 'required|string|max:255',
@@ -135,17 +135,9 @@ class FaltanteController extends Controller
 
     public function destroy(Faltante $faltante)
     {
-        $this->authorizeBranch($faltante->branch_id, request());
+        $this->authorize('delete', $faltante);
 
         $faltante->delete();
         return redirect()->back();
-    }
-
-    private function authorizeBranch(?int $resourceBranchId, \Illuminate\Http\Request $request): void
-    {
-        $isRoot = $request->is_root ?? false;
-        if (!$isRoot && $resourceBranchId !== $request->user_branch_id) {
-            abort(403, 'No tienes acceso a datos de otra sucursal.');
-        }
     }
 }

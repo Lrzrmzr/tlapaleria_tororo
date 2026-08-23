@@ -2,6 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Branch;
+use App\Models\Category;
+use App\Models\Customer;
+use App\Models\Product;
+use App\Models\Supplier;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Spatie\Activitylog\Models\Activity;
@@ -9,17 +15,43 @@ use Spatie\Activitylog\Models\Activity;
 class AuditController extends Controller
 {
     /**
+     * Modelos cuyo catálogo es compartido entre sucursales (no tienen
+     * branch_id): un administrador de sucursal puede ver su actividad sin que
+     * eso implique fuga de datos de otra sucursal.
+     */
+    private const GLOBAL_CATALOG_MODELS = [
+        Product::class,
+        Category::class,
+        Supplier::class,
+        Customer::class,
+    ];
+
+    /**
      * Muestra el dashboard de auditoría con todos los logs
      */
     public function index(Request $request)
     {
+        $this->authorize('viewAny', Activity::class);
+
         $currentUser = $request->user();
-        if (!$currentUser || (!$currentUser->isRoot() && !$currentUser->isBranchAdmin())) {
-            abort(403, 'Solo administradores pueden ver la auditoría.');
-        }
+        $isRoot      = $currentUser->isRoot();
+        $branchId    = $currentUser->branch_id;
 
         $query = Activity::with(['causer', 'subject'])
             ->latest();
+
+        // Un administrador de sucursal solo ve actividad de catálogos globales
+        // o de registros marcados con su propia sucursal (branch_id en el
+        // payload logueado) — nunca el historial completo de otras sucursales.
+        if (!$isRoot) {
+            $query->where(function ($scope) use ($branchId) {
+                $scope->whereIn('subject_type', self::GLOBAL_CATALOG_MODELS)
+                    ->orWhere(function ($branchScope) use ($branchId) {
+                        $branchScope->whereJsonContains('properties->attributes->branch_id', (int) $branchId)
+                            ->orWhereJsonContains('properties->old->branch_id', (int) $branchId);
+                    });
+            });
+        }
 
         // Filtrar por búsqueda general (descripción personalizada o ID)
         if ($request->filled('search')) {
@@ -89,13 +121,14 @@ class AuditController extends Controller
             ];
         });
 
-        // Obtener lista de usuarios para el filtro
-        $users = \App\Models\User::select('id', 'name')->orderBy('name')->get();
+        // Obtener lista de usuarios para el filtro (acotada a la sucursal si no es root)
+        $users = User::select('id', 'name')
+            ->when(!$isRoot, fn ($q) => $q->where('branch_id', $branchId))
+            ->orderBy('name')->get();
 
         // Obtener lista de sucursales para el filtro (si es root)
-        $currentUser = $request->user();
-        $branches = $currentUser && $currentUser->isRoot()
-            ? \App\Models\Branch::select('id', 'name')->orderBy('name')->get()
+        $branches = $isRoot
+            ? Branch::select('id', 'name')->orderBy('name')->get()
             : collect([]);
 
         // Modelos disponibles
@@ -167,12 +200,8 @@ class AuditController extends Controller
      */
     public function show(Request $request, $id)
     {
-        $currentUser = $request->user();
-        if (!$currentUser || !$currentUser->isRoot()) {
-            abort(403, 'Solo el administrador root puede ver detalles de auditoría.');
-        }
-
         $activity = Activity::with(['causer', 'subject'])->findOrFail($id);
+        $this->authorize('view', $activity);
 
         return Inertia::render('Auditoria/Show', [
             'activity' => [

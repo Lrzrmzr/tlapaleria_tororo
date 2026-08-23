@@ -74,10 +74,10 @@ class FaltanteApiController extends Controller
     /**
      * Obtener un faltante específico
      */
-    public function show(int $id, Request $request)
+    public function show(int $id)
     {
         $faltante = Faltante::with(['user', 'branch'])->findOrFail($id);
-        $this->authorizeBranch($faltante->branch_id, $request->user());
+        $this->authorize('update', $faltante);
 
         return response()->json(['success' => true, 'data' => $faltante]);
     }
@@ -117,7 +117,7 @@ class FaltanteApiController extends Controller
     public function update(Request $request, int $id)
     {
         $faltante = Faltante::findOrFail($id);
-        $this->authorizeBranch($faltante->branch_id, $request->user());
+        $this->authorize('update', $faltante);
 
         $validated = $request->validate([
             'descripcion' => 'sometimes|string|max:255',
@@ -137,10 +137,10 @@ class FaltanteApiController extends Controller
     /**
      * Marcar faltante como completado (confirmado)
      */
-    public function markAsCompleted(int $id, Request $request)
+    public function markAsCompleted(int $id)
     {
         $faltante = Faltante::findOrFail($id);
-        $this->authorizeBranch($faltante->branch_id, $request->user());
+        $this->authorize('update', $faltante);
 
         $faltante->update(['confirmado' => true]);
 
@@ -164,18 +164,10 @@ class FaltanteApiController extends Controller
         }
 
         $faltante = Faltante::findOrFail($id);
-        $this->authorizeBranch($faltante->branch_id, $user);
+        $this->authorize('delete', $faltante);
 
         $faltante->delete();
 
         return response()->json(['success' => true, 'message' => 'Faltante eliminado exitosamente']);
-    }
-
-    private function authorizeBranch(?int $branchId, \App\Models\User $user): void
-    {
-        if ($user->isRoot()) return;
-        if ($branchId !== $user->branch_id) {
-            abort(403, 'No tienes acceso a datos de otra sucursal.');
-        }
     }
 }

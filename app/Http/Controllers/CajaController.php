@@ -3,17 +3,19 @@
 namespace App\Http\Controllers;
 
 use App\Models\CashRegister;
-use App\Models\Sale;
-use App\Models\Gasto;
-use App\Models\Cobro;
-use App\Models\PagoProveedor;
 use App\Models\Branch;
+use App\Services\CajaService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
+use RuntimeException;
 
 class CajaController extends Controller
 {
+    public function __construct(private CajaService $cajaService)
+    {
+    }
+
     public function index(Request $request)
     {
         $branchId = $request->user_branch_id;
@@ -33,7 +35,7 @@ class CajaController extends Controller
 
         return Inertia::render('Caja/Index', [
             'cajaAbierta' => $abierta ? $this->formatCaja($abierta) : null,
-            'historial'   => $historial->map(fn($c) => $this->formatCaja($c))->values(),
+            'historial'   => $historial->map(fn ($c) => $this->formatCaja($c))->values(),
             'branches'    => $branches,
             'isRoot'      => $isRoot,
             'filters'     => ['branch_id' => $request->branch_id],
@@ -42,32 +44,25 @@ class CajaController extends Controller
 
     public function abrir(Request $request)
     {
-        $branchId = $request->user_branch_id;
+        $isRoot = $request->is_root ?? false;
+
+        $request->validate([
+            'fondo_inicial' => 'required|numeric|min:0',
+            'branch_id'     => $isRoot ? 'required|exists:branches,id' : 'nullable',
+        ]);
+
+        // Root no tiene sucursal propia: debe elegir explícitamente para cuál
+        // sucursal abre el turno (ver selector en Caja/Index.vue).
+        $branchId = $isRoot ? (int) $request->branch_id : $request->user_branch_id;
 
         if (!$branchId) {
             return redirect()->back()->withErrors(['error' => 'Necesitas una sucursal asignada para abrir caja.']);
         }
 
-        $yaAbierta = CashRegister::where('branch_id', $branchId)->where('status', 'abierta')->exists();
-        if ($yaAbierta) {
-            return redirect()->back()->withErrors(['error' => 'Ya hay un turno de caja abierto en esta sucursal.']);
-        }
-
-        $request->validate([
-            'fondo_inicial' => 'required|numeric|min:0',
-        ]);
-
         try {
-            CashRegister::create([
-                'branch_id'      => $branchId,
-                'user_id'        => Auth::id(),
-                'fondo_inicial'  => $request->fondo_inicial,
-                'fecha_apertura' => now(),
-                'status'         => 'abierta',
-            ]);
-        } catch (\Illuminate\Database\QueryException $e) {
-            // Protección a nivel BD contra doble apertura simultánea (índice único parcial)
-            return redirect()->back()->withErrors(['error' => 'Ya hay un turno de caja abierto en esta sucursal.']);
+            $this->cajaService->abrir($branchId, Auth::id(), (float) $request->fondo_inicial);
+        } catch (RuntimeException $e) {
+            return redirect()->back()->withErrors(['error' => $e->getMessage()]);
         }
 
         return redirect()->back()->with('success', 'Turno de caja abierto.');
@@ -75,10 +70,7 @@ class CajaController extends Controller
 
     public function cerrar(Request $request, CashRegister $caja)
     {
-        $isRoot = $request->is_root ?? false;
-        if (!$isRoot && $caja->branch_id !== $request->user_branch_id) {
-            abort(403, 'No tienes acceso a la caja de otra sucursal.');
-        }
+        $this->authorize('cerrar', $caja);
 
         if ($caja->status === 'cerrada') {
             return redirect()->back()->withErrors(['error' => 'Este turno ya está cerrado.']);
@@ -89,46 +81,9 @@ class CajaController extends Controller
             'notas'            => 'nullable|string|max:1000',
         ]);
 
-        $desde = $caja->fecha_apertura;
-        $hasta = now();
+        $caja = $this->cajaService->cerrar($caja, (float) $request->efectivo_contado, $request->notas, Auth::id());
 
-        $ventasEfectivo = Sale::where('branch_id', $caja->branch_id)
-            ->where('metodo_pago', 'efectivo')
-            ->where('status', 'completed')
-            ->whereBetween('created_at', [$desde, $hasta])
-            ->sum('total');
-
-        $gastosPeriodo = Gasto::where('branch_id', $caja->branch_id)
-            ->whereBetween('created_at', [$desde, $hasta])
-            ->sum('monto');
-
-        $cobrosEfectivo = Cobro::where('metodo_pago', 'efectivo')
-            ->whereBetween('created_at', [$desde, $hasta])
-            ->whereHas('cuentaPorCobrar', fn($q) => $q->where('branch_id', $caja->branch_id))
-            ->sum('monto');
-
-        $pagosEfectivo = PagoProveedor::where('metodo_pago', 'efectivo')
-            ->whereBetween('created_at', [$desde, $hasta])
-            ->whereHas('cuentaPorPagar', fn($q) => $q->where('branch_id', $caja->branch_id))
-            ->sum('monto');
-
-        $efectivoEsperado = $caja->fondo_inicial + $ventasEfectivo + $cobrosEfectivo - $gastosPeriodo - $pagosEfectivo;
-        $diferencia = $request->efectivo_contado - $efectivoEsperado;
-
-        $caja->update([
-            'closed_by'          => Auth::id(),
-            'fecha_cierre'       => $hasta,
-            'ventas_efectivo'    => $ventasEfectivo,
-            'gastos_periodo'     => $gastosPeriodo,
-            'cobros_efectivo'    => $cobrosEfectivo,
-            'pagos_efectivo'     => $pagosEfectivo,
-            'efectivo_esperado'  => $efectivoEsperado,
-            'efectivo_contado'   => $request->efectivo_contado,
-            'diferencia'         => $diferencia,
-            'status'             => 'cerrada',
-            'notas'              => $request->notas,
-        ]);
-
+        $diferencia = (float) $caja->diferencia;
         $msg = abs($diferencia) < 0.01
             ? 'Caja cerrada sin diferencias.'
             : ($diferencia > 0

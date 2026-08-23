@@ -7,6 +7,8 @@ const props = defineProps({
     ventas: Array,
     productos: Array,
     user: Object,
+    isRoot: Boolean,
+    branches: Array,
     ventasLibresHabilitadas: Boolean,
     filters: Object,
 });
@@ -46,6 +48,7 @@ const formLibre = useForm({
     total:            0,
     metodo_pago:      'efectivo',
     idempotency_key:  newIdempotencyKey(),
+    branch_id:        '',
 });
 
 // Form para venta de catálogo
@@ -556,6 +559,19 @@ function abrirModalCatalogo() {
                                         <option value="transferencia">Transferencia</option>
                                     </select>
                                 </div>
+
+                                <div v-if="isRoot">
+                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                        Sucursal
+                                    </label>
+                                    <select
+                                        v-model="formLibre.branch_id"
+                                        class="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-3 focus:ring-2 focus:ring-orange-500 dark:bg-gray-700 dark:text-white"
+                                    >
+                                        <option value="" disabled>Selecciona una sucursal</option>
+                                        <option v-for="b in branches" :key="b.id" :value="b.id">{{ b.name }}</option>
+                                    </select>
+                                </div>
                             </div>
                         </div>
 
@@ -569,7 +585,7 @@ function abrirModalCatalogo() {
                             </button>
                             <button
                                 type="submit"
-                                :disabled="formLibre.processing"
+                                :disabled="formLibre.processing || (isRoot && !formLibre.branch_id)"
                                 class="px-6 py-2 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white rounded-lg font-semibold shadow-lg transition-all disabled:opacity-50"
                             >
                                 <span v-if="formLibre.processing">Guardando...</span>

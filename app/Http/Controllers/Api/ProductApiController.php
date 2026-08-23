@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\ProductResource;
 use App\Models\Product;
 use Illuminate\Http\Request;
 
@@ -13,7 +14,8 @@ class ProductApiController extends Controller
      */
     public function index(Request $request)
     {
-        $query = Product::with(['supplier', 'categories', 'branchInventory']);
+        $query = Product::with(['supplier', 'categories'])
+            ->with(['branchInventory' => $this->branchInventoryScope($request)]);
 
         // Filtro: Búsqueda por nombre, descripción o código de barras
         if ($request->filled('search')) {
@@ -42,12 +44,12 @@ class ProductApiController extends Controller
             $query->where('active', $request->active);
         }
 
-        $perPage  = min(max((int) $request->get('per_page', 50), 1), 200);
+        $perPage  = min(max($request->integer('per_page', 50), 1), 200);
         $products = $query->paginate($perPage);
 
         return response()->json([
             'success' => true,
-            'data' => $products->items(),
+            'data' => ProductResource::collection($products->items()),
             'pagination' => [
                 'total' => $products->total(),
                 'per_page' => $products->perPage(),
@@ -62,14 +64,15 @@ class ProductApiController extends Controller
     /**
      * Obtener un producto específico
      */
-    public function show(int $id)
+    public function show(Request $request, int $id)
     {
-        $product = Product::with(['supplier', 'categories', 'inventory.branch'])
+        $product = Product::with(['supplier', 'categories'])
+            ->with(['branchInventory' => $this->branchInventoryScope($request)])
             ->findOrFail($id);
 
         return response()->json([
             'success' => true,
-            'data' => $product
+            'data' => new ProductResource($product),
         ]);
     }
 
@@ -78,7 +81,7 @@ class ProductApiController extends Controller
      */
     public function store(Request $request)
     {
-        $this->authorizeAdminOrRoot($request);
+        $this->authorize('create', Product::class);
 
         $validated = $request->validate([
             'name' => 'required|string|max:255',
@@ -95,7 +98,7 @@ class ProductApiController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Producto creado exitosamente',
-            'data' => $product->load(['supplier', 'categories'])
+            'data' => new ProductResource($product->load(['supplier', 'categories']))
         ], 201);
     }
 
@@ -104,9 +107,8 @@ class ProductApiController extends Controller
      */
     public function update(Request $request, int $id)
     {
-        $this->authorizeAdminOrRoot($request);
-
         $product = Product::findOrFail($id);
+        $this->authorize('update', $product);
 
         $validated = $request->validate([
             'name' => 'sometimes|required|string|max:255',
@@ -123,7 +125,7 @@ class ProductApiController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Producto actualizado exitosamente',
-            'data' => $product->load(['supplier', 'categories'])
+            'data' => new ProductResource($product->load(['supplier', 'categories']))
         ]);
     }
 
@@ -132,23 +134,15 @@ class ProductApiController extends Controller
      */
     public function destroy(Request $request, int $id)
     {
-        $this->authorizeAdminOrRoot($request);
-
         $product = Product::findOrFail($id);
+        $this->authorize('delete', $product);
+
         $product->delete();
 
         return response()->json([
             'success' => true,
             'message' => 'Producto eliminado exitosamente'
         ]);
-    }
-
-    private function authorizeAdminOrRoot(Request $request): void
-    {
-        $user = $request->user();
-        if (!$user || (!$user->isRoot() && !$user->isBranchAdmin())) {
-            abort(response()->json(['success' => false, 'message' => 'Solo administradores pueden gestionar el catálogo de productos.'], 403));
-        }
     }
 
     /**
@@ -160,7 +154,8 @@ class ProductApiController extends Controller
             'barcode' => 'required|string'
         ]);
 
-        $product = Product::with(['supplier', 'categories', 'branchInventory'])
+        $product = Product::with(['supplier', 'categories'])
+            ->with(['branchInventory' => $this->branchInventoryScope($request)])
             ->where('barcode', $request->barcode)
             ->first();
 
@@ -173,7 +168,29 @@ class ProductApiController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => $product
+            'data' => new ProductResource($product),
         ]);
+    }
+
+    /**
+     * Closure de scope para la relación branchInventory: root sin filtro ve
+     * todas las sucursales (intencional); cualquier otro caso — incluido un
+     * usuario no-root sin sucursal asignada, un estado de cuenta anómalo que
+     * la API no puede descartar como sí hace check.branch en la web — se
+     * limita a una sucursal concreta o, si no hay ninguna, no ve ningún
+     * inventario (fail-closed) en vez de caer por defecto a "todas".
+     */
+    private function branchInventoryScope(Request $request): \Closure
+    {
+        $user = $request->user();
+
+        if ($user->isRoot()) {
+            $branchId = $request->filled('branch_id') ? (int) $request->branch_id : null;
+            return $branchId
+                ? fn ($q) => $q->where('branch_id', $branchId)
+                : fn ($q) => $q->with('branch');
+        }
+
+        return fn ($q) => $q->where('branch_id', $user->branch_id);
     }
 }

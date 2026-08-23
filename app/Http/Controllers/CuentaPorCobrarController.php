@@ -6,13 +6,18 @@ use App\Models\CuentaPorCobrar;
 use App\Models\Cobro;
 use App\Models\Customer;
 use App\Models\Branch;
-use App\Models\User;
+use App\Services\CuentaPorCobrarService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
+use RuntimeException;
 
 class CuentaPorCobrarController extends Controller
 {
+    public function __construct(private CuentaPorCobrarService $cuentaService)
+    {
+    }
+
     public function index(Request $request)
     {
         $userBranchId = $request->user_branch_id;
@@ -117,11 +122,7 @@ class CuentaPorCobrarController extends Controller
 
     public function update(Request $request, CuentaPorCobrar $cuentaPorCobrar)
     {
-        $userBranchId = $request->user_branch_id;
-        $isRoot       = $request->is_root ?? false;
-        $user         = Auth::user();
-
-        $this->authorizeBranchAccess($cuentaPorCobrar->branch_id, $userBranchId, $isRoot);
+        $this->authorize('update', $cuentaPorCobrar);
 
         $data = $request->validate([
             'customer_id'       => 'required|exists:customers,id',
@@ -140,8 +141,7 @@ class CuentaPorCobrarController extends Controller
 
     public function destroy(CuentaPorCobrar $cuentaPorCobrar)
     {
-        $this->authorizeRole(Auth::user(), ['root', 'administrador']);
-        $this->authorizeBranchAccess($cuentaPorCobrar->branch_id, request()->user_branch_id, request()->is_root ?? false);
+        $this->authorize('delete', $cuentaPorCobrar);
 
         $cuentaPorCobrar->delete();
 
@@ -150,11 +150,7 @@ class CuentaPorCobrarController extends Controller
 
     public function storeCobro(Request $request, CuentaPorCobrar $cuentaPorCobrar)
     {
-        $userBranchId = $request->user_branch_id;
-        $isRoot       = $request->is_root ?? false;
-        $user         = Auth::user();
-
-        $this->authorizeBranchAccess($cuentaPorCobrar->branch_id, $userBranchId, $isRoot);
+        $this->authorize('registrarCobro', $cuentaPorCobrar);
 
         if ($cuentaPorCobrar->status === 'liquidada') {
             return redirect()->back()->withErrors(['error' => 'Esta cuenta ya está totalmente liquidada.']);
@@ -168,35 +164,22 @@ class CuentaPorCobrarController extends Controller
             'notas'       => 'nullable|string|max:500',
         ]);
 
-        $data['cuenta_por_cobrar_id'] = $cuentaPorCobrar->id;
-        $data['user_id']              = $user->id;
-
-        Cobro::create($data);
+        try {
+            $this->cuentaService->registrarCobro($cuentaPorCobrar, $data, Auth::id());
+        } catch (RuntimeException $e) {
+            return redirect()->back()->withErrors(['error' => $e->getMessage()]);
+        }
 
         return redirect()->back()->with('success', 'Cobro registrado correctamente.');
     }
 
     public function destroyCobro(Cobro $cobro)
     {
-        $this->authorizeRole(Auth::user(), ['root', 'administrador']);
-        $this->authorizeBranchAccess($cobro->cuentaPorCobrar->branch_id, request()->user_branch_id, request()->is_root ?? false);
+        $this->authorize('delete', $cobro);
 
         $cobro->delete();
 
         return redirect()->back()->with('success', 'Cobro eliminado.');
-    }
-
-    private function authorizeRole(User $user, array $allowed): void
-    {
-        if (!in_array($user->roles->first()?->name, $allowed)) {
-            abort(403, 'No tienes permisos para realizar esta acción.');
-        }
-    }
-
-    private function authorizeBranchAccess(?int $resourceBranchId, ?int $userBranchId, bool $isRoot): void
-    {
-        if ($isRoot) return;
-        if ($resourceBranchId !== $userBranchId) abort(403, 'No tienes acceso a los datos de otra sucursal.');
     }
 
     private function formatCuenta(CuentaPorCobrar $c): array

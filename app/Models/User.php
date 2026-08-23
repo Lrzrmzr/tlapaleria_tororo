@@ -88,38 +88,34 @@ class User extends Authenticatable
 
     /**
      * Verifica si es administrador global (root)
-     * ID 1 = root (administrador general)
      */
     public function isRoot(): bool
     {
-        return $this->hasRole('root') || $this->roles()->where('roles.id', 1)->exists();
+        return $this->hasRole('root');
     }
 
     /**
      * Verifica si es administrador de sucursal
-     * ID 2 = administrador (admin de sucursal)
      */
     public function isBranchAdmin(): bool
     {
-        return $this->hasRole('administrador') || $this->roles()->where('roles.id', 2)->exists();
+        return $this->hasRole('administrador');
     }
 
     /**
      * Verifica si es trabajador
-     * ID 3 = trabajador
      */
     public function isWorker(): bool
     {
-        return $this->hasRole('trabajador') || $this->roles()->where('roles.id', 3)->exists();
+        return $this->hasRole('trabajador');
     }
 
     /**
      * Verifica si es cliente
-     * ID 4 = cliente
      */
     public function isClient(): bool
     {
-        return $this->hasRole('cliente') || $this->roles()->where('roles.id', 4)->exists();
+        return $this->hasRole('cliente');
     }
 
     /**

@@ -33,20 +33,20 @@ class CheckBranchAccess
                 ->withErrors(['error' => 'Tu cuenta ha sido desactivada. Contacta al administrador.']);
         }
 
-        // Clientes (ID=4) NO tienen acceso al sistema actualmente (para futuras ventas en línea)
+        // Clientes NO tienen acceso al sistema actualmente (para futuras ventas en línea)
         if ($user->isClient()) {
             return redirect()->route('login')
                 ->withErrors(['error' => 'Los clientes no tienen acceso al sistema de administración. Este rol está reservado para futuras ventas en línea.']);
         }
 
-        // Root (ID=1) tiene acceso a todo sin necesidad de sucursal
+        // Root tiene acceso a todo sin necesidad de sucursal
         if ($user->isRoot()) {
             $request->merge(['user_branch_id' => null]); // null = ve todas las sucursales
             $request->merge(['is_root' => true]);
             return $next($request);
         }
 
-        // Administradores (ID=2) y Trabajadores (ID=3) NECESITAN sucursal asignada
+        // Administradores y Trabajadores NECESITAN sucursal asignada
         if (!$user->hasSystemAccess()) {
             // Redirigir a página especial de "Sin Sucursal Asignada"
             return redirect()->route('sin-sucursal')

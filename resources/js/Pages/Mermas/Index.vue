@@ -9,6 +9,7 @@ const props = defineProps({
     productos: Array,
     branches: Array,
     isRoot: Boolean,
+    canDelete: Boolean,
     filters: Object,
 });
 
@@ -124,7 +125,7 @@ function eliminar(id) {
                             <td class="p-3 text-gray-600 dark:text-gray-400">{{ m.fecha }}</td>
                             <td class="p-3 text-gray-600 dark:text-gray-400">{{ m.user }}</td>
                             <td class="p-3 text-right">
-                                <button @click="eliminar(m.id)" class="text-xs text-red-500 hover:underline">Eliminar</button>
+                                <button v-if="canDelete" @click="eliminar(m.id)" class="text-xs text-red-500 hover:underline">Eliminar</button>
                             </td>
                         </tr>
                     </tbody>

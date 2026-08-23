@@ -90,14 +90,6 @@ class Branch extends Model
     }
 
     /**
-     * Relación con ventas de esta sucursal (alias)
-     */
-    public function ventas(): HasMany
-    {
-        return $this->hasMany(Venta::class);
-    }
-
-    /**
      * Relación con compras de esta sucursal
      */
     public function purchases(): HasMany

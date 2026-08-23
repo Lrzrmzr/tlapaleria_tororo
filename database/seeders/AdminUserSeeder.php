@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Models\Role;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
@@ -20,11 +21,13 @@ class AdminUserSeeder extends Seeder
             ]
         );
 
+        $rootRoleId = Role::where('name', 'root')->value('id');
+
         // Asignar rol root si no lo tiene ya
-        if (!DB::table('role_user')->where('user_id', $user->id)->where('role_id', 1)->exists()) {
+        if ($rootRoleId && !DB::table('role_user')->where('user_id', $user->id)->where('role_id', $rootRoleId)->exists()) {
             DB::table('role_user')->insert([
                 'user_id'    => $user->id,
-                'role_id'    => 1,
+                'role_id'    => $rootRoleId,
                 'created_at' => now(),
                 'updated_at' => null,
             ]);

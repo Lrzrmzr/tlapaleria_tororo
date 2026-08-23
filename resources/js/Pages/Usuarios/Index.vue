@@ -35,12 +35,12 @@ const usuariosFiltrados = computed(() => {
     return props.usuarios.filter(u => u.role?.id === parseInt(filtroRol.value));
 });
 
-const esAdmin = computed(() => {
-    return props.user.id === 1 || props.user.role?.name === 'administrador';
+const esRoot = computed(() => {
+    return props.user.role?.name === 'root';
 });
 
-const esRoot = computed(() => {
-    return props.user.role?.name === 'root' || props.user.id === 1;
+const esAdmin = computed(() => {
+    return esRoot.value || props.user.role?.name === 'administrador';
 });
 
 const rolesParaCrear = computed(() => {
@@ -307,7 +307,7 @@ function getRolColor(rolName) {
                                             {{ usuario.branch.name }}
                                         </span>
                                         <span
-                                            v-else-if="usuario.role?.id === 1"
+                                            v-else-if="usuario.role?.name === 'root'"
                                             class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300"
                                         >
                                             <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -338,7 +338,7 @@ function getRolColor(rolName) {
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap">
                                         <select
-                                            v-if="esAdmin && usuario.role?.id !== 1"
+                                            v-if="esAdmin && usuario.role?.name !== 'root'"
                                             @change="asignarSucursal(usuario.id, $event.target.value)"
                                             :value="usuario.branch?.id ?? ''"
                                             class="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-green-500 dark:bg-gray-700 dark:text-white"
@@ -346,7 +346,7 @@ function getRolColor(rolName) {
                                             <option value="">Sin sucursal</option>
                                             <option v-for="branch in branches" :key="branch.id" :value="branch.id">{{ branch.name }}</option>
                                         </select>
-                                        <span v-else-if="usuario.role?.id === 1" class="text-sm text-purple-600 dark:text-purple-400 font-medium">
+                                        <span v-else-if="usuario.role?.name === 'root'" class="text-sm text-purple-600 dark:text-purple-400 font-medium">
                                             No requiere
                                         </span>
                                         <span v-else class="text-sm text-gray-400 dark:text-gray-500">
@@ -560,7 +560,7 @@ function getRolColor(rolName) {
                                             {{ usuarioSeleccionado.branch.name }}
                                         </span>
                                         <span
-                                            v-else-if="usuarioSeleccionado.role?.id === 1"
+                                            v-else-if="usuarioSeleccionado.role?.name === 'root'"
                                             class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300"
                                         >
                                             Todas

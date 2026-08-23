@@ -3,17 +3,20 @@
 namespace App\Http\Controllers;
 
 use App\Models\Branch;
-use App\Models\BranchInventory;
-use App\Models\InventoryMovement;
 use App\Models\Merma;
 use App\Models\Product;
+use App\Services\MermaService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
+use RuntimeException;
 
 class MermaController extends Controller
 {
+    public function __construct(private MermaService $mermaService)
+    {
+    }
+
     public function index(Request $request)
     {
         $branchId = $request->user_branch_id;
@@ -56,6 +59,9 @@ class MermaController extends Controller
             'productos' => $productos,
             'branches'  => $branches,
             'isRoot'    => $isRoot,
+            // MermaPolicy::delete exige root o admin de sucursal — el botón
+            // "Eliminar" se oculta para trabajadores en vez de darles un 403.
+            'canDelete' => Auth::user()->isRoot() || Auth::user()->isBranchAdmin(),
             'filters'   => ['branch_id' => $request->branch_id],
         ]);
     }
@@ -76,52 +82,24 @@ class MermaController extends Controller
 
         $data['branch_id'] = $isRoot ? $data['branch_id'] : $branchId;
 
-        $inventario = BranchInventory::where('branch_id', $data['branch_id'])
-            ->where('product_id', $data['product_id'])
-            ->first();
-
-        if (!$inventario || $inventario->stock < $data['quantity']) {
-            return redirect()->back()->withErrors(['error' => 'Stock insuficiente para registrar esta merma.']);
-        }
-
-        DB::beginTransaction();
         try {
-            $merma = Merma::create([
-                'branch_id'  => $data['branch_id'],
-                'product_id' => $data['product_id'],
-                'quantity'   => $data['quantity'],
-                'motivo'     => $data['motivo'],
-                'notas'      => $data['notas'] ?? null,
-                'user_id'    => Auth::id(),
-                'fecha'      => $data['fecha'],
-            ]);
-
-            InventoryMovement::aplicar(
-                $inventario,
-                'merma',
-                -$data['quantity'],
-                ucfirst($data['motivo']) . ' — Merma #' . $merma->id,
-                $merma,
-                Auth::id()
-            );
-
-            DB::commit();
-            return redirect()->back()->with('success', 'Merma registrada. Inventario actualizado.');
-
-        } catch (\Exception $e) {
-            DB::rollBack();
+            $this->mermaService->registrar($data, Auth::id());
+        } catch (RuntimeException $e) {
             return redirect()->back()->withErrors(['error' => $e->getMessage()]);
+        } catch (\Throwable $e) {
+            report($e);
+            return redirect()->back()->withErrors(['error' => 'Ocurrió un error inesperado al registrar la merma. Intenta de nuevo.']);
         }
+
+        return redirect()->back()->with('success', 'Merma registrada. Inventario actualizado.');
     }
 
     public function destroy(Request $request, Merma $merma)
     {
-        $isRoot = $request->is_root ?? false;
-        if (!$isRoot && $merma->branch_id !== $request->user_branch_id) {
-            abort(403, 'No tienes acceso a datos de otra sucursal.');
-        }
+        $this->authorize('delete', $merma);
 
-        $merma->delete();
-        return redirect()->back()->with('success', 'Registro de merma eliminado (el stock no se revierte automáticamente).');
+        $this->mermaService->eliminar($merma, Auth::id());
+
+        return redirect()->back()->with('success', 'Merma eliminada. El inventario fue restituido.');
     }
 }

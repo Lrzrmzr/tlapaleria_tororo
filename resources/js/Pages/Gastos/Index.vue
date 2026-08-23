@@ -5,7 +5,9 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 
 const props = defineProps({
     gastos: Array,
-    user: Object
+    user: Object,
+    isRoot: Boolean,
+    branches: Array,
 });
 
 const mostrarFormulario = ref(false);
@@ -13,6 +15,7 @@ const mostrarFormulario = ref(false);
 const form = useForm({
     descripcion: '',
     monto: 0,
+    branch_id: '',
 });
 
 // Calcular total de gastos
@@ -145,6 +148,19 @@ function formatCurrency(value) {
                                     {{ form.errors.monto }}
                                 </div>
                             </div>
+
+                            <div v-if="isRoot">
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                    Sucursal
+                                </label>
+                                <select
+                                    v-model="form.branch_id"
+                                    class="w-full rounded-lg border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                                >
+                                    <option value="" disabled>Selecciona una sucursal</option>
+                                    <option v-for="b in branches" :key="b.id" :value="b.id">{{ b.name }}</option>
+                                </select>
+                            </div>
                         </div>
 
                         <div class="mt-6 flex items-center justify-end gap-4">
@@ -157,7 +173,7 @@ function formatCurrency(value) {
                             </button>
                             <button
                                 type="submit"
-                                :disabled="form.processing"
+                                :disabled="form.processing || (isRoot && !form.branch_id)"
                                 class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50"
                             >
                                 {{ form.processing ? 'Guardando...' : 'Guardar Gasto' }}

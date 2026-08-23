@@ -134,9 +134,10 @@ Route::middleware(['auth', 'check.branch', 'throttle:10,1'])->group(function () 
 
 // Reportes & Corte de Caja
 Route::middleware(['auth', 'check.branch'])->group(function () {
-    Route::get('/reportes',     [\App\Http\Controllers\ReporteController::class, 'index'])->name('reportes.index');
-    Route::get('/reportes/pdf', [\App\Http\Controllers\ReporteController::class, 'exportPdf'])->name('reportes.pdf');
-    Route::get('/reportes/csv', [\App\Http\Controllers\ReporteController::class, 'exportCsv'])->name('reportes.csv');
+    Route::get('/reportes',           [\App\Http\Controllers\ReporteController::class, 'index'])->name('reportes.index');
+    Route::get('/reportes/tendencia', [\App\Http\Controllers\ReporteController::class, 'tendencia'])->name('reportes.tendencia');
+    Route::get('/reportes/pdf',       [\App\Http\Controllers\ReporteController::class, 'exportPdf'])->name('reportes.pdf');
+    Route::get('/reportes/csv',       [\App\Http\Controllers\ReporteController::class, 'exportCsv'])->name('reportes.csv');
 });
 
 // Cuentas por Pagar

@@ -5,15 +5,19 @@ namespace App\Http\Controllers;
 use App\Models\Product;
 use App\Models\Supplier;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
 
 class ProductController extends Controller
 {
     public function index(Request $request)
     {
-        // Construir query con filtros
-        $query = Product::with(['supplier', 'branchInventory', 'suppliers', 'categories']);
+        $branchId = $request->user_branch_id;
+        $isRoot   = $request->is_root ?? false;
+
+        // Construir query con filtros — branchInventory acotado a la sucursal
+        // del usuario (root ve todas) para no mezclar stock de otras sucursales.
+        $query = Product::with(['supplier', 'suppliers', 'categories'])
+            ->with(['branchInventory' => fn ($q) => $branchId ? $q->where('branch_id', $branchId) : $q]);
 
         // Filtro: Búsqueda por nombre, descripción o código de barras
         if ($request->filled('search')) {
@@ -58,8 +62,9 @@ class ProductController extends Controller
 
         // Paginación — límite máximo para prevenir DoS por per_page masivo
         $perPage = min(max((int) $request->get('per_page', 50), 1), 200);
-        $productos = $query->paginate($perPage)->through(function ($producto) {
+        $productos = $query->paginate($perPage)->through(function ($producto) use ($branchId) {
             $inventario = $producto->branchInventory->first();
+            $stockTotal = $branchId ? ($inventario->stock ?? 0) : $producto->branchInventory->sum('stock');
 
             // Obtener información de todos los proveedores
             $proveedoresData = $producto->suppliers->map(function ($supplier) {
@@ -97,7 +102,7 @@ class ProductController extends Controller
                 'suppliers_list' => $proveedoresData,
                 'suppliers_count' => $proveedoresData->count(),
                 'lowest_cost' => $proveedoresData->min('cost') ?? $producto->cost ?? 0,
-                'stock' => $inventario ? ($inventario->stock ?? 0) : 0,
+                'stock' => $stockTotal,
                 'has_inventory' => $inventario ? true : false,
                 'categories' => $categoriesData,
                 'categories_count' => $categoriesData->count(),
@@ -166,7 +171,7 @@ class ProductController extends Controller
 
     public function store(Request $request)
     {
-        $this->authorizeAdminOrRoot();
+        $this->authorize('manage', Product::class);
 
         $request->validate([
             'name' => 'required|string|max:255',
@@ -226,7 +231,7 @@ class ProductController extends Controller
 
     public function update(Request $request, Product $producto)
     {
-        $this->authorizeAdminOrRoot();
+        $this->authorize('manage', Product::class);
 
         $request->validate([
             'name' => 'required|string|max:255',
@@ -288,7 +293,7 @@ class ProductController extends Controller
 
     public function destroy(Product $producto)
     {
-        $this->authorizeAdminOrRoot();
+        $this->authorize('manage', Product::class);
 
         // Verificar si el producto tiene inventario
         if ($producto->branchInventory()->exists()) {
@@ -309,7 +314,7 @@ class ProductController extends Controller
      */
     public function attachSupplier(Request $request, Product $producto)
     {
-        $this->authorizeAdminOrRoot();
+        $this->authorize('manage', Product::class);
 
         $request->validate([
             'supplier_id' => 'required|exists:suppliers,id',
@@ -348,7 +353,7 @@ class ProductController extends Controller
      */
     public function updateSupplier(Request $request, Product $producto, Supplier $supplier)
     {
-        $this->authorizeAdminOrRoot();
+        $this->authorize('manage', Product::class);
 
         $request->validate([
             'cost' => 'required|numeric|min:0',
@@ -380,7 +385,7 @@ class ProductController extends Controller
      */
     public function detachSupplier(Product $producto, Supplier $supplier)
     {
-        $this->authorizeAdminOrRoot();
+        $this->authorize('manage', Product::class);
 
         $producto->suppliers()->detach($supplier->id);
         return redirect()->back()->with('success', 'Proveedor eliminado exitosamente');
@@ -516,11 +521,4 @@ class ProductController extends Controller
         return response()->json($product->categories);
     }
 
-    private function authorizeAdminOrRoot(): void
-    {
-        $user = Auth::user();
-        if (!$user || (!$user->isRoot() && !$user->isBranchAdmin())) {
-            abort(403, 'Solo administradores pueden gestionar el catálogo de productos.');
-        }
-    }
 }

@@ -52,7 +52,7 @@ class BranchController extends Controller
      */
     public function store(Request $request)
     {
-        $this->authorizeRoot();
+        $this->authorize('manage', Branch::class);
         $validated = $request->validate([
             'name' => 'required|string|max:100',
             'code' => 'required|string|max:20|unique:branches,code',
@@ -85,7 +85,7 @@ class BranchController extends Controller
      */
     public function update(Request $request, $id)
     {
-        $this->authorizeRoot();
+        $this->authorize('manage', Branch::class);
         $branch = Branch::findOrFail($id);
 
         $validated = $request->validate([
@@ -115,7 +115,7 @@ class BranchController extends Controller
      */
     public function destroy($id)
     {
-        $this->authorizeRoot();
+        $this->authorize('manage', Branch::class);
         $branch = Branch::findOrFail($id);
 
         // No permitir eliminar la sucursal principal
@@ -142,7 +142,7 @@ class BranchController extends Controller
      */
     public function restore($id)
     {
-        $this->authorizeRoot();
+        $this->authorize('manage', Branch::class);
         $branch = Branch::withTrashed()->findOrFail($id);
         $branch->restore();
         $branch->update(['active' => true]);
@@ -155,7 +155,7 @@ class BranchController extends Controller
      */
     public function toggleStatus($id)
     {
-        $this->authorizeRoot();
+        $this->authorize('manage', Branch::class);
         $branch = Branch::findOrFail($id);
 
         if ($branch->is_main && $branch->active) {
@@ -192,14 +192,10 @@ class BranchController extends Controller
     /**
      * Get branch inventory
      */
-    public function inventory($id, \Illuminate\Http\Request $request)
+    public function inventory($id)
     {
-        $user = \Illuminate\Support\Facades\Auth::user();
-        if (!$user->isRoot() && (int) $id !== (int) $user->branch_id) {
-            abort(403, 'Solo puedes consultar el inventario de tu propia sucursal.');
-        }
-
         $branch = Branch::findOrFail($id);
+        $this->authorize('view', $branch);
 
         $inventory = $branch->inventory()
             ->with('product')
@@ -229,26 +225,14 @@ class BranchController extends Controller
         ]);
     }
 
-    private function authorizeRoot(): void
-    {
-        $user = \Illuminate\Support\Facades\Auth::user();
-        if (!$user || !$user->isRoot()) {
-            abort(403, 'Solo el administrador root puede gestionar sucursales.');
-        }
-    }
-
     /**
      * Get branch statistics
      */
     public function statistics($id)
     {
-        $user = \Illuminate\Support\Facades\Auth::user();
-        if (!$user->isRoot() && (int) $id !== (int) $user->branch_id) {
-            abort(403, 'Solo puedes consultar estadísticas de tu propia sucursal.');
-        }
-
         $branch = Branch::withCount(['users', 'inventory', 'sales', 'purchases'])
             ->findOrFail($id);
+        $this->authorize('view', $branch);
 
         $stats = [
             'users_count' => $branch->users_count,

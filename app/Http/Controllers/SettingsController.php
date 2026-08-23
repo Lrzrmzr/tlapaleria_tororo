@@ -16,7 +16,7 @@ class SettingsController extends Controller
      */
     public function index()
     {
-        // Verificar que el usuario es root (role_id = 1)
+        // Verificar que el usuario es root
         if (!$this->isRootUser()) {
             abort(403, 'No tienes permisos para acceder a esta sección');
         }

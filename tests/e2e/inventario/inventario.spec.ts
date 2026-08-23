@@ -157,7 +157,9 @@ test.describe('Inventario', () => {
     await expect(modal).not.toBeVisible({ timeout: 8_000 });
 
     await page.waitForLoadState('networkidle');
-    await expect(page.locator('tbody tr').filter({ hasText: PRODUCTO_NOMBRE }).getByText('10')).toBeVisible();
+    // exact:true evita el falso positivo/negativo cuando el día del mes
+    // (ej. "10/07/2026" en la columna "Actualizado") contiene el mismo texto.
+    await expect(page.locator('tbody tr').filter({ hasText: PRODUCTO_NOMBRE }).getByText('10', { exact: true })).toBeVisible();
   });
 
   // ─── ELIMINAR ─────────────────────────────────────────────────────────────

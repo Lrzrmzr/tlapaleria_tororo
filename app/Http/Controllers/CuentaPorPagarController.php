@@ -6,13 +6,18 @@ use App\Models\CuentaPorPagar;
 use App\Models\PagoProveedor;
 use App\Models\Supplier;
 use App\Models\Branch;
-use App\Models\User;
+use App\Services\CuentaPorPagarService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
+use RuntimeException;
 
 class CuentaPorPagarController extends Controller
 {
+    public function __construct(private CuentaPorPagarService $cuentaService)
+    {
+    }
+
     public function index(Request $request)
     {
         $userBranchId = $request->user_branch_id;
@@ -97,11 +102,7 @@ class CuentaPorPagarController extends Controller
 
     public function update(Request $request, CuentaPorPagar $cuentaPorPagar)
     {
-        $userBranchId = $request->user_branch_id;
-        $isRoot       = $request->is_root ?? false;
-        $user         = Auth::user();
-
-        $this->authorizeBranchAccess($cuentaPorPagar->branch_id, $userBranchId, $isRoot);
+        $this->authorize('update', $cuentaPorPagar);
 
         $data = $request->validate([
             'supplier_id'       => 'required|exists:suppliers,id',
@@ -121,8 +122,7 @@ class CuentaPorPagarController extends Controller
 
     public function destroy(CuentaPorPagar $cuentaPorPagar)
     {
-        $this->authorizeRole(Auth::user(), ['root', 'administrador']);
-        $this->authorizeBranchAccess($cuentaPorPagar->branch_id, request()->user_branch_id, request()->is_root ?? false);
+        $this->authorize('delete', $cuentaPorPagar);
 
         $cuentaPorPagar->delete();
 
@@ -131,11 +131,7 @@ class CuentaPorPagarController extends Controller
 
     public function storePago(Request $request, CuentaPorPagar $cuentaPorPagar)
     {
-        $userBranchId = $request->user_branch_id;
-        $isRoot       = $request->is_root ?? false;
-        $user         = Auth::user();
-
-        $this->authorizeBranchAccess($cuentaPorPagar->branch_id, $userBranchId, $isRoot);
+        $this->authorize('registrarPago', $cuentaPorPagar);
 
         if ($cuentaPorPagar->status === 'pagada') {
             return redirect()->back()->withErrors(['error' => 'Esta cuenta ya está totalmente pagada.']);
@@ -149,35 +145,22 @@ class CuentaPorPagarController extends Controller
             'notas'       => 'nullable|string|max:500',
         ]);
 
-        $data['cuenta_por_pagar_id'] = $cuentaPorPagar->id;
-        $data['user_id']             = $user->id;
-
-        PagoProveedor::create($data);
+        try {
+            $this->cuentaService->registrarPago($cuentaPorPagar, $data, Auth::id());
+        } catch (RuntimeException $e) {
+            return redirect()->back()->withErrors(['error' => $e->getMessage()]);
+        }
 
         return redirect()->back()->with('success', 'Pago registrado correctamente.');
     }
 
     public function destroyPago(PagoProveedor $pago)
     {
-        $this->authorizeRole(Auth::user(), ['root', 'administrador']);
-        $this->authorizeBranchAccess($pago->cuentaPorPagar->branch_id, request()->user_branch_id, request()->is_root ?? false);
+        $this->authorize('delete', $pago);
 
         $pago->delete();
 
         return redirect()->back()->with('success', 'Pago eliminado.');
-    }
-
-    private function authorizeRole(User $user, array $allowed): void
-    {
-        if (!in_array($user->roles->first()?->name, $allowed)) {
-            abort(403, 'No tienes permisos para realizar esta acción.');
-        }
-    }
-
-    private function authorizeBranchAccess(?int $resourceBranchId, ?int $userBranchId, bool $isRoot): void
-    {
-        if ($isRoot) return;
-        if ($resourceBranchId !== $userBranchId) abort(403, 'No tienes acceso a los datos de otra sucursal.');
     }
 
     private function formatCuenta(CuentaPorPagar $c): array
