@@ -6,6 +6,7 @@ use App\Models\Sale;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\Support\CreatesBusinessFixtures;
 use Tests\TestCase;
 
@@ -72,7 +73,7 @@ class AsistenteSqlGuardTest extends TestCase
         ];
     }
 
-    /** @dataProvider payloadsDeTablasNoPermitidas */
+    #[DataProvider('payloadsDeTablasNoPermitidas')]
     public function test_no_permite_leer_tablas_fuera_de_la_allowlist(string $sql): void
     {
         $user = $this->makeUser($this->makeBranch(), 'trabajador');
@@ -94,7 +95,7 @@ class AsistenteSqlGuardTest extends TestCase
         ];
     }
 
-    /** @dataProvider payloadsDeEvasionDeSucursal */
+    #[DataProvider('payloadsDeEvasionDeSucursal')]
     public function test_un_trabajador_solo_ve_datos_de_su_sucursal(string $sql): void
     {
         [$a, $b, $trabajador] = $this->dosSucursalesConVentas();
@@ -140,7 +141,7 @@ class AsistenteSqlGuardTest extends TestCase
         ];
     }
 
-    /** @dataProvider payloadsConEfectos */
+    #[DataProvider('payloadsConEfectos')]
     public function test_rechaza_funciones_con_efectos_y_sentencias_peligrosas(string $sql): void
     {
         [, , $trabajador] = $this->dosSucursalesConVentas();
