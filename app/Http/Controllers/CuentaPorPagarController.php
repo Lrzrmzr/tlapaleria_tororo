@@ -20,8 +20,8 @@ class CuentaPorPagarController extends Controller
 
     public function index(Request $request)
     {
-        $userBranchId = $request->user_branch_id;
-        $isRoot       = $request->is_root ?? false;
+        $userBranchId = $request->attributes->get('user_branch_id');
+        $isRoot       = $request->attributes->get('is_root') ?? false;
         $user         = Auth::user();
         $roleName     = $user->roles->first()?->name ?? 'trabajador';
 
@@ -74,8 +74,8 @@ class CuentaPorPagarController extends Controller
 
     public function store(Request $request)
     {
-        $userBranchId = $request->user_branch_id;
-        $isRoot       = $request->is_root ?? false;
+        $userBranchId = $request->attributes->get('user_branch_id');
+        $isRoot       = $request->attributes->get('is_root') ?? false;
         $user         = Auth::user();
 
         $data = $request->validate([

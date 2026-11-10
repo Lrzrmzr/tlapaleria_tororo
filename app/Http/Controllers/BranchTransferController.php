@@ -19,8 +19,8 @@ class BranchTransferController extends Controller
 
     public function index(Request $request)
     {
-        $branchId = $request->user_branch_id;
-        $isRoot   = $request->is_root ?? false;
+        $branchId = $request->attributes->get('user_branch_id');
+        $isRoot   = $request->attributes->get('is_root') ?? false;
 
         $query = BranchTransfer::with(['branchOrigen', 'branchDestino', 'user', 'details.product']);
         if (!$isRoot) {

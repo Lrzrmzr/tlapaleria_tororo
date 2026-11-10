@@ -11,8 +11,8 @@ class ProductController extends Controller
 {
     public function index(Request $request)
     {
-        $branchId = $request->user_branch_id;
-        $isRoot   = $request->is_root ?? false;
+        $branchId = $request->attributes->get('user_branch_id');
+        $isRoot   = $request->attributes->get('is_root') ?? false;
 
         // Construir query con filtros — branchInventory acotado a la sucursal
         // del usuario (root ve todas) para no mezclar stock de otras sucursales.

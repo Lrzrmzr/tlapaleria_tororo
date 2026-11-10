@@ -41,8 +41,7 @@ class CheckBranchAccess
 
         // Root tiene acceso a todo sin necesidad de sucursal
         if ($user->isRoot()) {
-            $request->merge(['user_branch_id' => null]); // null = ve todas las sucursales
-            $request->merge(['is_root' => true]);
+            $this->setBranchScope($request, null, true); // null = ve todas las sucursales
             return $next($request);
         }
 
@@ -54,9 +53,22 @@ class CheckBranchAccess
         }
 
         // Agregar la sucursal del usuario al request para uso posterior
-        $request->merge(['user_branch_id' => $user->branch_id]);
-        $request->merge(['is_root' => false]);
+        $this->setBranchScope($request, $user->branch_id !== null ? (int) $user->branch_id : null, false);
 
         return $next($request);
+    }
+
+    /**
+     * El alcance de sucursal se guarda en $request->attributes (bolsa interna del
+     * servidor), NO en el input. Antes se usaba $request->merge() y los
+     * controladores lo leían con $request->is_root; ese getter mágico resuelve
+     * contra all(), donde los archivos subidos pisan al input, así que un
+     * multipart con un archivo llamado "is_root" se convertía en root.
+     * Los controladores deben leerlo con $request->attributes->get(...).
+     */
+    private function setBranchScope(Request $request, ?int $branchId, bool $isRoot): void
+    {
+        $request->attributes->set('user_branch_id', $branchId);
+        $request->attributes->set('is_root', $isRoot);
     }
 }

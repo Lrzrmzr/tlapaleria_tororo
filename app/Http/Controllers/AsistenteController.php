@@ -63,8 +63,8 @@ class AsistenteController extends Controller
         $request->validate(['pregunta' => 'required|string|max:600']);
 
         $pregunta     = trim($request->pregunta);
-        $branchId     = $request->user_branch_id;
-        $isRoot       = $request->is_root ?? false;
+        $branchId     = $request->attributes->get('user_branch_id');
+        $isRoot       = $request->attributes->get('is_root') ?? false;
         $apiKey       = config('services.groq.api_key');
 
         if (!$apiKey) {

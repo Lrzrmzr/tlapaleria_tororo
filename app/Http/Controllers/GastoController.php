@@ -18,11 +18,11 @@ class GastoController extends Controller
 
     public function index(Request $request)
     {
-        $isRoot = $request->is_root ?? false;
+        $isRoot = $request->attributes->get('is_root') ?? false;
         $query = Gasto::with('user');
 
         if (!$isRoot) {
-            $query->where('branch_id', $request->user_branch_id);
+            $query->where('branch_id', $request->attributes->get('user_branch_id'));
         }
 
         $gastos = $query->latest()
@@ -58,13 +58,13 @@ class GastoController extends Controller
 
     public function store(StoreGastoRequest $request)
     {
-        $isRoot = $request->is_root ?? false;
+        $isRoot = $request->attributes->get('is_root') ?? false;
 
         if ($isRoot) {
             $request->validate(['branch_id' => 'nullable|exists:branches,id']);
         }
 
-        $branchId = $isRoot ? $request->branch_id : $request->user_branch_id;
+        $branchId = $isRoot ? $request->branch_id : $request->attributes->get('user_branch_id');
 
         try {
             $this->gastoService->registrar(

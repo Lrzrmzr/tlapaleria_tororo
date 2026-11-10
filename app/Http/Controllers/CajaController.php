@@ -18,8 +18,8 @@ class CajaController extends Controller
 
     public function index(Request $request)
     {
-        $branchId = $request->user_branch_id;
-        $isRoot   = $request->is_root ?? false;
+        $branchId = $request->attributes->get('user_branch_id');
+        $isRoot   = $request->attributes->get('is_root') ?? false;
 
         $query = CashRegister::with(['branch', 'user', 'closedBy']);
         if (!$isRoot) {
@@ -44,7 +44,7 @@ class CajaController extends Controller
 
     public function abrir(Request $request)
     {
-        $isRoot = $request->is_root ?? false;
+        $isRoot = $request->attributes->get('is_root') ?? false;
 
         $request->validate([
             'fondo_inicial' => 'required|numeric|min:0',
@@ -53,7 +53,7 @@ class CajaController extends Controller
 
         // Root no tiene sucursal propia: debe elegir explícitamente para cuál
         // sucursal abre el turno (ver selector en Caja/Index.vue).
-        $branchId = $isRoot ? (int) $request->branch_id : $request->user_branch_id;
+        $branchId = $isRoot ? (int) $request->branch_id : $request->attributes->get('user_branch_id');
 
         if (!$branchId) {
             return redirect()->back()->withErrors(['error' => 'Necesitas una sucursal asignada para abrir caja.']);

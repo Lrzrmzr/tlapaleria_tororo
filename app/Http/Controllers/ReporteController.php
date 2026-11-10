@@ -20,7 +20,7 @@ class ReporteController extends Controller
     {
         $user     = Auth::user();
         $roleName = $user->roles->first()?->name ?? 'trabajador';
-        $isRoot   = $request->is_root ?? false;
+        $isRoot   = $request->attributes->get('is_root') ?? false;
         $branches = $isRoot
             ? Branch::where('active', true)->orderBy('name')->get(['id', 'name'])
             : collect();
@@ -41,7 +41,7 @@ class ReporteController extends Controller
     {
         $user     = Auth::user();
         $roleName = $user->roles->first()?->name ?? 'trabajador';
-        $isRoot   = $request->is_root ?? false;
+        $isRoot   = $request->attributes->get('is_root') ?? false;
         $branches = $isRoot
             ? Branch::where('active', true)->orderBy('name')->get(['id', 'name'])
             : collect();
@@ -60,8 +60,8 @@ class ReporteController extends Controller
 
     private function buildTendenciaData(Request $request): array
     {
-        $userBranchId  = $request->user_branch_id;
-        $isRoot        = $request->is_root ?? false;
+        $userBranchId  = $request->attributes->get('user_branch_id');
+        $isRoot        = $request->attributes->get('is_root') ?? false;
         $granularidad  = in_array($request->granularidad, ['dia', 'mes', 'anio'], true) ? $request->granularidad : 'mes';
         $branchId      = ($isRoot && $request->filled('branch_id')) ? (int) $request->branch_id : $userBranchId;
         $anioActual    = now()->year;
@@ -268,8 +268,8 @@ class ReporteController extends Controller
 
     private function buildData(Request $request): array
     {
-        $userBranchId = $request->user_branch_id;
-        $isRoot       = $request->is_root ?? false;
+        $userBranchId = $request->attributes->get('user_branch_id');
+        $isRoot       = $request->attributes->get('is_root') ?? false;
 
         $fechaDesde = Carbon::parse($request->filled('fecha_desde') ? $request->fecha_desde : today())->startOfDay();
         $fechaHasta = Carbon::parse($request->filled('fecha_hasta') ? $request->fecha_hasta : today())->endOfDay();

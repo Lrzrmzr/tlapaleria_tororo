@@ -19,8 +19,8 @@ class MermaController extends Controller
 
     public function index(Request $request)
     {
-        $branchId = $request->user_branch_id;
-        $isRoot   = $request->is_root ?? false;
+        $branchId = $request->attributes->get('user_branch_id');
+        $isRoot   = $request->attributes->get('is_root') ?? false;
 
         $query = Merma::with(['branch', 'product', 'user'])->latest('fecha');
         if (!$isRoot) {
@@ -68,8 +68,8 @@ class MermaController extends Controller
 
     public function store(Request $request)
     {
-        $branchId = $request->user_branch_id;
-        $isRoot   = $request->is_root ?? false;
+        $branchId = $request->attributes->get('user_branch_id');
+        $isRoot   = $request->attributes->get('is_root') ?? false;
 
         $data = $request->validate([
             'branch_id'  => $isRoot ? 'required|exists:branches,id' : 'nullable',

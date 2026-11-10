@@ -20,8 +20,8 @@ class InventarioController extends Controller
 
     public function index(Request $request)
     {
-        $userBranchId = $request->user_branch_id; // Inyectado por middleware
-        $isRoot = $request->is_root ?? false; // Inyectado por middleware
+        $userBranchId = $request->attributes->get('user_branch_id'); // Inyectado por middleware
+        $isRoot = $request->attributes->get('is_root') ?? false; // Inyectado por middleware
 
         // Si es root, obtener todas las sucursales, si no, solo la del usuario
         $branches = $isRoot
@@ -183,8 +183,8 @@ class InventarioController extends Controller
 
     public function store(Request $request)
     {
-        $userBranchId = $request->user_branch_id;
-        $isRoot = $request->is_root ?? false;
+        $userBranchId = $request->attributes->get('user_branch_id');
+        $isRoot = $request->attributes->get('is_root') ?? false;
 
         $request->validate([
             'product_id' => 'required|exists:products,id',

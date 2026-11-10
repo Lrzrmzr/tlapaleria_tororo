@@ -12,8 +12,8 @@ class FaltanteController extends Controller
 {
     public function index(Request $request)
     {
-        $branchId = $request->user_branch_id;
-        $isRoot   = $request->is_root ?? false;
+        $branchId = $request->attributes->get('user_branch_id');
+        $isRoot   = $request->attributes->get('is_root') ?? false;
 
         $query = Faltante::with('user')->latest();
 
@@ -41,9 +41,9 @@ class FaltanteController extends Controller
         ])->values();
 
         // Stats calculadas en BD, no en colección
-        $branchId            = $request->user_branch_id;
+        $branchId            = $request->attributes->get('user_branch_id');
         $statsQuery          = Faltante::query();
-        if (!($request->is_root ?? false) && $branchId) {
+        if (!($request->attributes->get('is_root') ?? false) && $branchId) {
             $statsQuery->where('branch_id', $branchId);
         }
         $totalFaltantes      = (clone $statsQuery)->count();
@@ -90,7 +90,7 @@ class FaltanteController extends Controller
             'pedido'         => $request->pedido,
             'confirmado'     => $request->confirmado ?? 0,
             'user_id'        => Auth::id(),
-            'branch_id'      => $request->user_branch_id,
+            'branch_id'      => $request->attributes->get('user_branch_id'),
             'fecha_faltante' => $request->fecha_faltante ?? now()->toDateString(),
         ]);
         return redirect()->back();
@@ -120,8 +120,8 @@ class FaltanteController extends Controller
             'ids.*' => 'integer|exists:faltantes,id',
         ]);
 
-        $branchId = $request->user_branch_id;
-        $isRoot   = $request->is_root ?? false;
+        $branchId = $request->attributes->get('user_branch_id');
+        $isRoot   = $request->attributes->get('is_root') ?? false;
 
         // Solo confirmar faltantes que pertenezcan a la sucursal del usuario
         $query = Faltante::whereIn('id', $request->ids);

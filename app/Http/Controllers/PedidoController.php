@@ -24,8 +24,8 @@ class PedidoController extends Controller
 {
     public function index(Request $request)
     {
-        $branchId = $request->user_branch_id;
-        $isRoot   = $request->is_root ?? false;
+        $branchId = $request->attributes->get('user_branch_id');
+        $isRoot   = $request->attributes->get('is_root') ?? false;
         $user     = Auth::user();
 
         $query = Purchase::with(['supplier', 'branch', 'user', 'purchaseDetails.product'])->latest();
@@ -84,8 +84,8 @@ class PedidoController extends Controller
 
     public function store(Request $request)
     {
-        $branchId = $request->user_branch_id;
-        $isRoot   = $request->is_root ?? false;
+        $branchId = $request->attributes->get('user_branch_id');
+        $isRoot   = $request->attributes->get('is_root') ?? false;
         $user     = Auth::user();
 
         $data = $request->validate([

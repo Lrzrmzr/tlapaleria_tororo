@@ -20,8 +20,8 @@ class VentaController extends Controller
 
     public function index(Request $request)
     {
-        $branchId   = $request->user_branch_id;
-        $isRoot     = $request->is_root ?? false;
+        $branchId   = $request->attributes->get('user_branch_id');
+        $isRoot     = $request->attributes->get('is_root') ?? false;
         $fechaDesde = $request->fecha_desde ?? Carbon::today()->toDateString();
         $fechaHasta = $request->fecha_hasta ?? Carbon::today()->toDateString();
         $search     = $request->search ?? '';
@@ -115,7 +115,7 @@ class VentaController extends Controller
 
     private function storeLibreVenta(Request $request)
     {
-        $isRoot = $request->is_root ?? false;
+        $isRoot = $request->attributes->get('is_root') ?? false;
 
         $data = $request->validate([
             'descripcion'      => 'required|string|max:255',
@@ -127,7 +127,7 @@ class VentaController extends Controller
         ]);
 
         // Sin sucursal propia, root debe elegir una explícitamente (selector en Ventas/Index.vue).
-        $branchId = $isRoot ? ($data['branch_id'] ?? null) : $request->user_branch_id;
+        $branchId = $isRoot ? ($data['branch_id'] ?? null) : $request->attributes->get('user_branch_id');
 
         try {
             $this->ventaService->registrarLibre($data, $branchId, Auth::id());
@@ -155,7 +155,7 @@ class VentaController extends Controller
                 $validated['metodo_pago'] ?? null,
                 $validated['fecha_venta'] ?? null,
                 $validated['idempotency_key'] ?? null,
-                $request->user_branch_id,
+                $request->attributes->get('user_branch_id'),
                 Auth::id()
             );
         } catch (\Throwable $e) {

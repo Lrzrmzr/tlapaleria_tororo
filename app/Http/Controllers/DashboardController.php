@@ -15,7 +15,7 @@ class DashboardController extends Controller
     public function index(Request $request)
     {
         // branchId = null para root (ve todo), int para usuarios de sucursal
-        $branchId = $request->user_branch_id;
+        $branchId = $request->attributes->get('user_branch_id');
 
         // ── Ventas (filtradas por sucursal, excluye canceladas) ────────────
         $ventasHoy  = Sale::completed()->whereDate('created_at', today())
