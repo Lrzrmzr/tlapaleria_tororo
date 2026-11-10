@@ -36,7 +36,9 @@ class PublicController extends Controller
      */
     private function getPublicProducts()
     {
-        return Product::with(['suppliers:id,name'])
+        // Sin proveedores: la UI pública no los muestra y son datos internos
+        // de compras (auditoría run-1, minimización de datos).
+        return Product::query()
             ->where('active', true)
             ->select(['id', 'name', 'description'])
             ->orderBy('name')
@@ -50,10 +52,6 @@ class PublicController extends Controller
                     'name' => $product->name,
                     'description' => $product->description,
                     'category' => $category,
-                    'suppliers' => $product->suppliers->map(fn($supplier) => [
-                        'id' => $supplier->id,
-                        'name' => $supplier->name
-                    ])
                 ];
             });
     }

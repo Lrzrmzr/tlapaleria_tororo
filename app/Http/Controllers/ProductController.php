@@ -135,14 +135,19 @@ class ProductController extends Controller
 
         // Estadísticas (optimizadas)
         $totalProductos = Product::count();
-        $productosConStock = Product::whereHas('branchInventory', function ($query) {
-            $query->where('stock', '>', 0);
+        // Las estadísticas de inventario se acotan a la sucursal del usuario
+        // (root ve todas), igual que la lista y que InventarioController.
+        $scopeSucursal = fn ($query) => $query->when(!$isRoot && $branchId, fn ($q) => $q->where('branch_id', $branchId));
+
+        $productosConStock = Product::whereHas('branchInventory', function ($query) use ($scopeSucursal) {
+            $scopeSucursal($query->where('stock', '>', 0));
         })->count();
-        $productosSinInventario = Product::whereDoesntHave('branchInventory')->count();
+        $productosSinInventario = Product::whereDoesntHave('branchInventory', $scopeSucursal)->count();
 
         // Valor total del inventario (optimizado con join)
         $valorTotalInventario = \DB::table('products')
             ->join('branch_inventory', 'products.id', '=', 'branch_inventory.product_id')
+            ->when(!$isRoot && $branchId, fn ($q) => $q->where('branch_inventory.branch_id', $branchId))
             ->selectRaw('SUM(branch_inventory.stock * products.price) as total')
             ->value('total') ?? 0;
 

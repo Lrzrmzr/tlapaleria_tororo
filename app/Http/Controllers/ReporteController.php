@@ -208,6 +208,13 @@ class ReporteController extends Controller
 
         return response()->stream(function () use ($data) {
             $f     = fopen('php://output', 'w');
+            // Textos capturados por usuarios (gastos, nombres) que empiezan con
+            // = + - @ tab o CR se ejecutarían como fórmula al abrir el CSV en
+            // Excel/LibreOffice; se prefijan con apóstrofo. Los montos numéricos
+            // (incluidos negativos) se dejan tal cual.
+            $celda = fn ($v) => is_string($v) && $v !== '' && !is_numeric($v) && in_array($v[0], ['=', '+', '-', '@', "\t", "\r"], true)
+                ? "'" . $v
+                : $v;
             $corte = $data['corte'];
             $f2    = $data['filters'];
 
@@ -246,7 +253,7 @@ class ReporteController extends Controller
                 fputcsv($f, ['TOP PRODUCTOS VENDIDOS']);
                 fputcsv($f, ['#', 'Producto', 'Cantidad', 'Total']);
                 foreach ($corte['top_productos'] as $i => $p) {
-                    fputcsv($f, [$i + 1, $p['name'], $p['cantidad'], $p['total']]);
+                    fputcsv($f, [$i + 1, $celda($p['name']), $p['cantidad'], $p['total']]);
                 }
                 fputcsv($f, []);
             }
@@ -255,7 +262,7 @@ class ReporteController extends Controller
                 fputcsv($f, ['DETALLE DE GASTOS']);
                 fputcsv($f, ['Descripción', 'Monto', 'Registrado por', 'Fecha']);
                 foreach ($corte['gastos_detalle'] as $g) {
-                    fputcsv($f, [$g['descripcion'], $g['monto'], $g['usuario'] ?? '', $g['fecha']]);
+                    fputcsv($f, [$celda($g['descripcion']), $g['monto'], $celda($g['usuario'] ?? ''), $g['fecha']]);
                 }
             }
 

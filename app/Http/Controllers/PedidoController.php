@@ -118,11 +118,12 @@ class PedidoController extends Controller
             }
         }
 
+        $imagenPath = null;
+
         DB::beginTransaction();
         try {
             $total = collect($data['items'])->sum(fn($i) => $i['quantity'] * $i['cost']);
 
-            $imagenPath = null;
             if ($request->hasFile('imagen')) {
                 $imagenPath = $request->file('imagen')->store('notas_proveedor/' . date('Y/m'), 'public');
             }
@@ -220,13 +221,19 @@ class PedidoController extends Controller
 
             return redirect()->back()->with('success', $msg);
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             DB::rollBack();
             if ($imagenPath) {
                 Storage::disk('public')->delete($imagenPath);
             }
-            Log::error('PedidoController::store', ['error' => $e->getMessage()]);
-            return redirect()->back()->withErrors(['error' => 'Error al registrar el pedido: ' . $e->getMessage()]);
+            // Los RuntimeException son mensajes de negocio pensados para el
+            // usuario; cualquier otra excepción (p. ej. QueryException con SQL y
+            // bindings) solo va al log.
+            if ($e instanceof \RuntimeException) {
+                return redirect()->back()->withErrors(['error' => $e->getMessage()]);
+            }
+            report($e);
+            return redirect()->back()->withErrors(['error' => 'Ocurrió un error inesperado al registrar el pedido. Intenta de nuevo.']);
         }
     }
 
