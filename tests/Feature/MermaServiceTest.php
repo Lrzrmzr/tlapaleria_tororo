@@ -68,4 +68,31 @@ class MermaServiceTest extends TestCase
         $this->assertNull(Merma::find($merma->id));
         $this->assertTrue($merma->fresh()->trashed());
     }
+
+    public function test_eliminar_con_instancia_desactualizada_no_restituye_stock_dos_veces(): void
+    {
+        $branch = $this->makeBranch();
+        $user = $this->makeUser($branch);
+        $product = $this->makeProduct();
+        $this->makeInventory($product, $branch, 10);
+
+        $merma = $this->service()->registrar([
+            'branch_id' => $branch->id, 'product_id' => $product->id,
+            'quantity' => 4, 'motivo' => 'dañado', 'fecha' => now()->toDateString(),
+        ], $user->id);
+
+        $peticionA = Merma::find($merma->id);
+        $peticionB = Merma::find($merma->id);
+
+        $this->service()->eliminar($peticionA, $user->id);
+
+        try {
+            $this->service()->eliminar($peticionB, $user->id);
+            $this->fail('El segundo borrado debió rechazarse.');
+        } catch (RuntimeException $e) {
+            $this->assertStringContainsString('ya fue eliminada', $e->getMessage());
+        }
+
+        $this->assertSame(10, $product->branchInventory()->first()->stock);
+    }
 }

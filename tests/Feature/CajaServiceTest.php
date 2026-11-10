@@ -114,4 +114,23 @@ class CajaServiceTest extends TestCase
 
         $this->assertSame(-50.0, (float) $cerrada->diferencia);
     }
+
+    public function test_cerrar_con_instancia_desactualizada_no_sobrescribe_el_corte(): void
+    {
+        $branch = $this->makeBranch();
+        $user = $this->makeUser($branch);
+        $caja = $this->service()->abrir($branch->id, $user->id, 200);
+
+        $peticionA = CashRegister::find($caja->id);
+        $peticionB = CashRegister::find($caja->id);
+
+        $this->service()->cerrar($peticionA, 200, 'primer cierre', $user->id);
+
+        $this->expectException(RuntimeException::class);
+        try {
+            $this->service()->cerrar($peticionB, 999, 'segundo cierre', $user->id);
+        } finally {
+            $this->assertSame(200.0, (float) CashRegister::find($caja->id)->efectivo_contado);
+        }
+    }
 }

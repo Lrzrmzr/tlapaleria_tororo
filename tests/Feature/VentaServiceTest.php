@@ -168,4 +168,36 @@ class VentaServiceTest extends TestCase
         $this->expectException(RuntimeException::class);
         $this->service()->cancelar($venta->fresh(), 'Otra vez', $user->id);
     }
+
+    /**
+     * Auditoría run-1: el chequeo de estado se hacía sobre el modelo enlazado,
+     * fuera de la transacción. Dos peticiones concurrentes (dos instancias
+     * cargadas antes de cancelar) devolvían el stock dos veces.
+     */
+    public function test_cancelar_con_instancia_desactualizada_no_devuelve_stock_dos_veces(): void
+    {
+        $branch = $this->makeBranch();
+        $user = $this->makeUser($branch);
+        $product = $this->makeProduct();
+        $this->makeInventory($product, $branch, 10);
+        $this->abrirCaja($branch, $user);
+
+        $venta = $this->service()->registrarCatalogo(
+            [['product_id' => $product->id, 'quantity' => 3]], 'efectivo', null, null, $branch->id, $user->id
+        );
+
+        $peticionA = Sale::find($venta->id);
+        $peticionB = Sale::find($venta->id);
+
+        $this->service()->cancelar($peticionA, 'a', $user->id);
+
+        try {
+            $this->service()->cancelar($peticionB, 'b', $user->id);
+            $this->fail('La segunda cancelación debió rechazarse.');
+        } catch (RuntimeException $e) {
+            $this->assertStringContainsString('ya está cancelada', $e->getMessage());
+        }
+
+        $this->assertSame(10, $product->branchInventory()->first()->stock);
+    }
 }

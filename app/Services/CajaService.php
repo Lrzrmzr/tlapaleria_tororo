@@ -8,6 +8,7 @@ use App\Models\Gasto;
 use App\Models\PagoProveedor;
 use App\Models\Sale;
 use Illuminate\Database\QueryException;
+use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
 class CajaService
@@ -56,6 +57,20 @@ class CajaService
     }
 
     public function cerrar(CashRegister $caja, float $efectivoContado, ?string $notas, int $closedById): CashRegister
+    {
+        return DB::transaction(function () use ($caja, $efectivoContado, $notas, $closedById) {
+            // Bloqueo + re-chequeo: un segundo cierre concurrente no debe
+            // sobrescribir el corte ya guardado.
+            $caja = CashRegister::whereKey($caja->getKey())->lockForUpdate()->firstOrFail();
+            if ($caja->status === 'cerrada') {
+                throw new RuntimeException('Este turno ya está cerrado.');
+            }
+
+            return $this->calcularYCerrar($caja, $efectivoContado, $notas, $closedById);
+        });
+    }
+
+    private function calcularYCerrar(CashRegister $caja, float $efectivoContado, ?string $notas, int $closedById): CashRegister
     {
         $desde = $caja->fecha_apertura;
         $hasta = now();

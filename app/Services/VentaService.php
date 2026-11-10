@@ -181,6 +181,13 @@ class VentaService
         }
 
         return DB::transaction(function () use ($venta, $motivo, $userId) {
+            // Re-leer con bloqueo: dos cancelaciones concurrentes (doble clic,
+            // reintento) no deben devolver el stock dos veces.
+            $venta = Sale::whereKey($venta->getKey())->lockForUpdate()->firstOrFail();
+            if ($venta->status === 'cancelled') {
+                throw new RuntimeException('Esta venta ya está cancelada.');
+            }
+
             foreach ($venta->saleDetails as $detail) {
                 if ($detail->tipo_venta !== 'catalogo' || !$detail->product_id) {
                     continue;

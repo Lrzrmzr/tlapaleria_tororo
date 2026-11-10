@@ -51,6 +51,13 @@ class MermaService
     public function eliminar(Merma $merma, int $userId): void
     {
         DB::transaction(function () use ($merma, $userId) {
+            // Re-leer con bloqueo (excluye soft-deleted): dos borrados
+            // concurrentes no deben restituir el stock dos veces.
+            $merma = Merma::whereKey($merma->getKey())->lockForUpdate()->first();
+            if (!$merma) {
+                throw new RuntimeException('Esta merma ya fue eliminada.');
+            }
+
             $inventario = BranchInventory::where('branch_id', $merma->branch_id)
                 ->where('product_id', $merma->product_id)
                 ->first();

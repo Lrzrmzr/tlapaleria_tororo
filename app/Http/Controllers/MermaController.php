@@ -98,7 +98,11 @@ class MermaController extends Controller
     {
         $this->authorize('delete', $merma);
 
-        $this->mermaService->eliminar($merma, Auth::id());
+        try {
+            $this->mermaService->eliminar($merma, Auth::id());
+        } catch (RuntimeException $e) {
+            return redirect()->back()->withErrors(['error' => $e->getMessage()]);
+        }
 
         return redirect()->back()->with('success', 'Merma eliminada. El inventario fue restituido.');
     }

@@ -81,7 +81,11 @@ class CajaController extends Controller
             'notas'            => 'nullable|string|max:1000',
         ]);
 
-        $caja = $this->cajaService->cerrar($caja, (float) $request->efectivo_contado, $request->notas, Auth::id());
+        try {
+            $caja = $this->cajaService->cerrar($caja, (float) $request->efectivo_contado, $request->notas, Auth::id());
+        } catch (RuntimeException $e) {
+            return redirect()->back()->withErrors(['error' => $e->getMessage()]);
+        }
 
         $diferencia = (float) $caja->diferencia;
         $msg = abs($diferencia) < 0.01
