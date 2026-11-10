@@ -82,7 +82,8 @@ class UsuarioController extends Controller
             'name'                  => 'required|string|max:255',
             'email'                 => 'required|email|max:255|unique:users,email',
             'password'              => 'required|string|min:8|confirmed',
-            'rol_id'                => 'nullable|exists:roles,id',
+            // integer: rechaza rol_id[] (un arreglo pasaba 'exists' y evadía el guard de root)
+            'rol_id'                => 'nullable|integer|exists:roles,id',
             'branch_id'             => 'nullable|exists:branches,id',
         ]);
 
@@ -120,8 +121,12 @@ class UsuarioController extends Controller
 
         $request->validate([
             'usuario_id' => 'required|exists:users,id',
-            'rol_id'     => 'nullable|exists:roles,id',
+            // integer: rechaza rol_id[]; antes un arreglo pasaba 'exists', evadía la
+            // comparación laxa contra root y attach() insertaba todos los ids.
+            'rol_id'     => 'nullable|integer|exists:roles,id',
         ]);
+
+        $rolId = $request->filled('rol_id') ? (int) $request->input('rol_id') : null;
 
         $usuario = User::findOrFail($request->usuario_id);
 
@@ -133,15 +138,12 @@ class UsuarioController extends Controller
         $rolRoot = Role::where('name', 'root')->first();
 
         // Solo root puede asignar el rol root
-        if ($request->rol_id && $rolRoot && $request->rol_id == $rolRoot->id && !$currentUser->isRoot()) {
+        if ($rolId !== null && $rolRoot && $rolId === $rolRoot->id && !$currentUser->isRoot()) {
             abort(403, 'No puedes asignar el rol root.');
         }
 
-        $usuario->roles()->detach();
-
-        if ($request->rol_id) {
-            $usuario->roles()->attach($request->rol_id);
-        }
+        // sync con un único id escalar: el usuario queda con exactamente un rol.
+        $usuario->roles()->sync($rolId !== null ? [$rolId] : []);
 
         return redirect()->back()->with('success', 'Rol asignado correctamente.');
     }
