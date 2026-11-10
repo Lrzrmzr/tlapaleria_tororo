@@ -14,4 +14,9 @@ class SalePolicy
     {
         return $this->inUserBranch($user, $venta->branch_id);
     }
+
+    public function ver(User $user, Sale $venta): bool
+    {
+        return $this->inUserBranch($user, $venta->branch_id);
+    }
 }

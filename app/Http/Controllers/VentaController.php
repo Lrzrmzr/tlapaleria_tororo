@@ -166,6 +166,25 @@ class VentaController extends Controller
     }
 
     /**
+     * Genera el comprobante de venta en PDF para descargar/compartir con el cliente.
+     */
+    public function comprobante(Sale $venta)
+    {
+        $this->authorize('ver', $venta);
+
+        $venta->load(['saleDetails.product', 'customer', 'user', 'branch']);
+
+        // Ancho fijo de ticket (80mm); alto flexible según cantidad de artículos
+        // para no dejar de espacio en blanco ni cortar a una segunda página.
+        $alto = 230 + ($venta->saleDetails->count() * 16);
+
+        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('ventas.comprobante-pdf', ['venta' => $venta])
+            ->setPaper([0, 0, 226.77, max(300, $alto)], 'portrait');
+
+        return $pdf->download("comprobante-venta-{$venta->id}.pdf");
+    }
+
+    /**
      * Cancela una venta ya registrada y devuelve el stock vendido (solo artículos de catálogo).
      */
     public function cancelar(Request $request, Sale $venta)

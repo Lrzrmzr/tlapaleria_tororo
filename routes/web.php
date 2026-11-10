@@ -62,6 +62,7 @@ Route::middleware(['auth', 'check.branch'])->group(function () {
     // Ventas
     Route::get('/ventas', [\App\Http\Controllers\VentaController::class, 'index'])->name('ventas.index');
     Route::post('/ventas', [\App\Http\Controllers\VentaController::class, 'store'])->name('ventas.store');
+    Route::get('/ventas/{venta}/comprobante', [\App\Http\Controllers\VentaController::class, 'comprobante'])->name('ventas.comprobante');
     Route::post('/ventas/{venta}/cancelar', [\App\Http\Controllers\VentaController::class, 'cancelar'])->name('ventas.cancelar');
 
     // Caja / corte de caja
