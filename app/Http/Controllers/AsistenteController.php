@@ -2,60 +2,15 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\AsistenteSqlGuard;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 class AsistenteController extends Controller
 {
-    // Tablas del negocio permitidas para consulta
-    private const ALLOWED_TABLES = [
-        'products', 'branch_inventory', 'branches', 'sales', 'sale_details',
-        'gastos', 'customers', 'suppliers', 'cuentas_por_cobrar', 'cuentas_por_pagar',
-        'cobros', 'pagos_proveedor', 'categories', 'category_product', 'product_supplier',
-    ];
-
-    // Columnas que NUNCA deben ser retornadas
-    private const FORBIDDEN_COLUMNS = [
-        'password', 'remember_token', 'token', 'secret', 'api_key',
-        'access_token', 'refresh_token', 'client_secret',
-    ];
-
-    private function validateSqlSafety(string $sql): ?string
+    public function __construct(private readonly AsistenteSqlGuard $sqlGuard)
     {
-        $sqlNorm = strtoupper(preg_replace('/\s+/', ' ', trim($sql)));
-
-        if (!str_starts_with($sqlNorm, 'SELECT')) {
-            return 'Solo se permiten consultas SELECT.';
-        }
-
-        $forbidden = ['INSERT', 'UPDATE', 'DELETE', 'DROP', 'TRUNCATE', 'CREATE',
-                      'ALTER', 'GRANT', 'REVOKE', 'EXEC', 'EXECUTE', 'CALL',
-                      'INTO OUTFILE', 'INTO DUMPFILE', 'LOAD_FILE', 'SLEEP', 'BENCHMARK'];
-        foreach ($forbidden as $kw) {
-            if (preg_match('/\b' . preg_quote($kw, '/') . '\b/', $sqlNorm)) {
-                return "Operación no permitida: {$kw}";
-            }
-        }
-
-        // Allowlist de tablas — extrae nombres tras FROM/JOIN
-        preg_match_all('/\b(?:FROM|JOIN)\s+([a-z_][a-z0-9_]*)/i', $sql, $matches);
-        foreach (array_map('strtolower', $matches[1] ?? []) as $table) {
-            if (!in_array($table, self::ALLOWED_TABLES, true)) {
-                return "Acceso denegado a la tabla: {$table}";
-            }
-        }
-
-        // Columnas prohibidas (datos sensibles)
-        $sqlLower = strtolower($sql);
-        foreach (self::FORBIDDEN_COLUMNS as $col) {
-            if (preg_match('/\b' . preg_quote($col, '/') . '\b/', $sqlLower)) {
-                return "Columna no permitida: {$col}";
-            }
-        }
-
-        return null;
     }
 
     public function consulta(Request $request)
@@ -64,7 +19,7 @@ class AsistenteController extends Controller
 
         $pregunta     = trim($request->pregunta);
         $branchId     = $request->attributes->get('user_branch_id');
-        $isRoot       = $request->attributes->get('is_root') ?? false;
+        $isRoot       = (bool) ($request->attributes->get('is_root') ?? false);
         $apiKey       = config('services.groq.api_key');
 
         if (!$apiKey) {
@@ -114,10 +69,12 @@ class AsistenteController extends Controller
             ]);
         }
 
-        // ── 3. Validar SQL (allowlist de tablas + columnas prohibidas) ───────
-        $sqlError = $this->validateSqlSafety($sql);
+        // ── 3. Validar SQL ────────────────────────────────────────────────────
+        // El SQL viene del modelo y el usuario puede manipularlo con su pregunta:
+        // se trata como entrada no confiable (ver AsistenteSqlGuard).
+        $sqlError = is_string($sql) ? $this->sqlGuard->validate($sql) : 'Formato inválido.';
         if ($sqlError !== null) {
-            Log::warning('Asistente SQL rechazado', ['sql' => $sql, 'reason' => $sqlError]);
+            Log::warning('Asistente SQL rechazado', ['reason' => $sqlError, 'user_id' => $request->user()?->id]);
             return response()->json([
                 'respuesta' => 'Esa consulta no está permitida. Solo puedo consultar información del negocio: precios, stock, ventas, gastos, deudas y clientes.',
                 'datos'     => [],
@@ -125,35 +82,12 @@ class AsistenteController extends Controller
             ]);
         }
 
-        // ── 3b. Forzar filtro de sucursal para usuarios no-root ───────────────
-        // Las tablas con branch_id que deben estar filtradas
-        $branchTables = ['sales', 'gastos', 'branch_inventory', 'cuentas_por_cobrar', 'cuentas_por_pagar'];
-        if (!$isRoot && $branchId) {
-            preg_match_all('/\b(?:FROM|JOIN)\s+([a-z_][a-z0-9_]*)/i', $sql, $tableMatches);
-            $usedTables = array_map('strtolower', $tableMatches[1] ?? []);
-            $usesBranchTable = !empty(array_intersect($usedTables, $branchTables));
-
-            if ($usesBranchTable) {
-                $sqlLower = strtolower($sql);
-                if (!preg_match('/branch_id\s*=\s*' . preg_quote((string) $branchId, '/') . '/', $sqlLower)) {
-                    Log::warning('Asistente SQL sin filtro de sucursal', ['sql' => $sql, 'branch_id' => $branchId]);
-                    // Inyectar el filtro en vez de rechazar, para no bloquear preguntas legítimas
-                    $sql = rtrim(rtrim($sql), ';');
-                    $hasWhere = preg_match('/\bWHERE\b/i', $sql);
-                    $sql .= $hasWhere
-                        ? " AND branch_id = {$branchId}"
-                        : " WHERE branch_id = {$branchId}";
-                }
-            }
-        }
-
-        // ── 4. Ejecutar SQL ───────────────────────────────────────────────────
+        // ── 4. Ejecutar SQL (solo lectura, alcance de sucursal forzado en BD) ──
         try {
-            $rows     = DB::select($sql);
-            $datos    = collect($rows)->map(fn($r) => (array) $r)->toArray();
+            $datos    = $this->sqlGuard->run($sql, $branchId, (bool) $isRoot);
             $columnas = !empty($datos) ? array_keys($datos[0]) : [];
-        } catch (\Exception $e) {
-            Log::error('Asistente SQL error', ['sql' => $sql, 'error' => $e->getMessage()]);
+        } catch (\Throwable $e) {
+            Log::error('Asistente SQL error', ['error' => $e->getMessage(), 'user_id' => $request->user()?->id]);
             return response()->json([
                 'respuesta' => 'Hubo un error al consultar los datos. Por favor reformula tu pregunta.',
                 'datos'     => [],
@@ -229,6 +163,7 @@ REGLAS ESTRICTAS:
 4. Limita con LIMIT 30 salvo que el usuario pida explícitamente más.
 5. Para preguntar por precio + stock de un producto, haz JOIN entre products y branch_inventory.
 6. Si la pregunta no tiene relación con el negocio o no la puedes resolver con estas tablas, devuelve sql: null.
+7. Una sola sentencia, sin punto y coma, sin comentarios, sin comillas dobles y sin WITH.
 
 Responde ÚNICAMENTE con JSON válido (sin backticks, sin texto adicional):
 {"sql": "SELECT ...", "descripcion": "Frase corta en español de qué estás buscando"}
