@@ -51,6 +51,9 @@ class NewPasswordController extends Controller
                     'remember_token' => Str::random(60),
                 ])->save();
 
+                // Quien restablece no tiene sesión: revocar todas las sesiones y tokens.
+                $user->revocarOtrosAccesos();
+
                 event(new PasswordReset($user));
             }
         );

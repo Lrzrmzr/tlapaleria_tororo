@@ -24,6 +24,9 @@ class PasswordController extends Controller
             'password' => Hash::make($validated['password']),
         ]);
 
+        // Cerrar las demás sesiones y revocar tokens; la sesión actual sigue activa.
+        $request->user()->revocarOtrosAccesos($request->session()->getId());
+
         return back();
     }
 }

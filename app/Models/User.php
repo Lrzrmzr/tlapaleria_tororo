@@ -136,6 +136,29 @@ class User extends Authenticatable
     }
 
     /**
+     * Revoca todo acceso del usuario salvo la sesión indicada: tokens Passport
+     * (duran 6 meses), cookies "recordarme" y sesiones web en BD. Se usa al
+     * cambiar o restablecer la contraseña, que es justo cuando el usuario
+     * sospecha que alguien más tiene acceso a su cuenta.
+     */
+    public function revocarOtrosAccesos(?string $sesionActualId = null): void
+    {
+        // Directo por user_id: la relación tokens() de Passport filtra por
+        // cliente/provider y dejaría vivos tokens de clientes ya borrados.
+        \Laravel\Passport\Passport::token()->newQuery()->where('user_id', $this->getKey())->delete();
+
+        $this->forceFill(['remember_token' => \Illuminate\Support\Str::random(60)])->save();
+
+        if (config('session.driver') === 'database') {
+            \Illuminate\Support\Facades\DB::connection(config('session.connection'))
+                ->table(config('session.table', 'sessions'))
+                ->where('user_id', $this->getKey())
+                ->when($sesionActualId, fn ($q) => $q->where('id', '!=', $sesionActualId))
+                ->delete();
+        }
+    }
+
+    /**
      * Scope para obtener solo usuarios activos
      */
     public function scopeActive($query)

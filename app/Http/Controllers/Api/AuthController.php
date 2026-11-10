@@ -96,8 +96,8 @@ class AuthController extends Controller
     {
         $user = $request->user();
 
-        if ($user && method_exists($user, 'tokens')) {
-            $user->tokens()->delete();
+        if ($user) {
+            \Laravel\Passport\Passport::token()->newQuery()->where('user_id', $user->getKey())->delete();
         }
 
         Auth::guard('web')->logout();
