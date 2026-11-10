@@ -35,7 +35,7 @@ Route::middleware(['web', 'throttle:10,1'])->group(function () {
 // ENDPOINTS PROTEGIDOS (requieren autenticación OAuth 2.0)
 // ========================================
 
-Route::middleware(['auth:api'])->group(function () {
+Route::middleware(['auth:api', 'api.access'])->group(function () {
 
     // Autenticación - Información del usuario y logout
     Route::get('/me', [AuthController::class, 'me']);
@@ -55,40 +55,42 @@ Route::middleware(['auth:api'])->group(function () {
     // ========================================
 
     if (env('MOBILE_API_ENABLED', false)) {
-        // Productos
-        Route::get('/mobile/products', [ProductApiController::class, 'index']);
-        Route::get('/mobile/products/{id}', [ProductApiController::class, 'show']);
-        Route::post('/mobile/products', [ProductApiController::class, 'store']);
-        Route::put('/mobile/products/{id}', [ProductApiController::class, 'update']);
-        Route::delete('/mobile/products/{id}', [ProductApiController::class, 'destroy']);
-        Route::get('/mobile/products/barcode/{barcode}', [ProductApiController::class, 'searchByBarcode']);
+        Route::middleware('api.access:branch')->group(function () {
+            // Productos
+            Route::get('/mobile/products', [ProductApiController::class, 'index']);
+            Route::get('/mobile/products/{id}', [ProductApiController::class, 'show']);
+            Route::post('/mobile/products', [ProductApiController::class, 'store']);
+            Route::put('/mobile/products/{id}', [ProductApiController::class, 'update']);
+            Route::delete('/mobile/products/{id}', [ProductApiController::class, 'destroy']);
+            Route::get('/mobile/products/barcode/{barcode}', [ProductApiController::class, 'searchByBarcode']);
 
-        // Inventario
-        Route::get('/mobile/inventory', [InventarioApiController::class, 'index']);
-        Route::get('/mobile/inventory/{id}', [InventarioApiController::class, 'show']);
-        Route::post('/mobile/inventory', [InventarioApiController::class, 'store']);
-        Route::post('/mobile/inventory/{id}/adjust', [InventarioApiController::class, 'adjustStock']);
-        Route::get('/mobile/inventory/productos-sin-inventario', [InventarioApiController::class, 'productosSinInventario']);
+            // Inventario
+            Route::get('/mobile/inventory', [InventarioApiController::class, 'index']);
+            Route::get('/mobile/inventory/{id}', [InventarioApiController::class, 'show']);
+            Route::post('/mobile/inventory', [InventarioApiController::class, 'store']);
+            Route::post('/mobile/inventory/{id}/adjust', [InventarioApiController::class, 'adjustStock']);
+            Route::get('/mobile/inventory/productos-sin-inventario', [InventarioApiController::class, 'productosSinInventario']);
 
-        // Gastos
-        Route::get('/mobile/gastos', [GastoApiController::class, 'index']);
-        Route::get('/mobile/gastos/{id}', [GastoApiController::class, 'show']);
-        Route::post('/mobile/gastos', [GastoApiController::class, 'store']);
-        Route::put('/mobile/gastos/{id}', [GastoApiController::class, 'update']);
-        Route::delete('/mobile/gastos/{id}', [GastoApiController::class, 'destroy']);
+            // Gastos
+            Route::get('/mobile/gastos', [GastoApiController::class, 'index']);
+            Route::get('/mobile/gastos/{id}', [GastoApiController::class, 'show']);
+            Route::post('/mobile/gastos', [GastoApiController::class, 'store']);
+            Route::put('/mobile/gastos/{id}', [GastoApiController::class, 'update']);
+            Route::delete('/mobile/gastos/{id}', [GastoApiController::class, 'destroy']);
 
-        // Faltantes
-        Route::get('/mobile/faltantes', [FaltanteApiController::class, 'index']);
-        Route::get('/mobile/faltantes/{id}', [FaltanteApiController::class, 'show']);
-        Route::post('/mobile/faltantes', [FaltanteApiController::class, 'store']);
-        Route::put('/mobile/faltantes/{id}', [FaltanteApiController::class, 'update']);
-        Route::post('/mobile/faltantes/{id}/complete', [FaltanteApiController::class, 'markAsCompleted']);
-        Route::delete('/mobile/faltantes/{id}', [FaltanteApiController::class, 'destroy']);
+            // Faltantes
+            Route::get('/mobile/faltantes', [FaltanteApiController::class, 'index']);
+            Route::get('/mobile/faltantes/{id}', [FaltanteApiController::class, 'show']);
+            Route::post('/mobile/faltantes', [FaltanteApiController::class, 'store']);
+            Route::put('/mobile/faltantes/{id}', [FaltanteApiController::class, 'update']);
+            Route::post('/mobile/faltantes/{id}/complete', [FaltanteApiController::class, 'markAsCompleted']);
+            Route::delete('/mobile/faltantes/{id}', [FaltanteApiController::class, 'destroy']);
 
-        // Sucursales
-        Route::get('/mobile/branches', [BranchApiController::class, 'index']);
-        Route::get('/mobile/branches/{id}', [BranchApiController::class, 'show']);
-        Route::get('/mobile/branches/{id}/stats', [BranchApiController::class, 'stats']);
+            // Sucursales
+            Route::get('/mobile/branches', [BranchApiController::class, 'index']);
+            Route::get('/mobile/branches/{id}', [BranchApiController::class, 'show']);
+            Route::get('/mobile/branches/{id}/stats', [BranchApiController::class, 'stats']);
+        });
     }
 
     // ========================================

@@ -37,6 +37,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'role' => \App\Http\Middleware\CheckRole::class,
             'check.branch' => \App\Http\Middleware\CheckBranchAccess::class,
+            'api.access' => \App\Http\Middleware\EnsureApiUserAccess::class,
         ]);
 
         // Excluir /api/login de la verificación CSRF

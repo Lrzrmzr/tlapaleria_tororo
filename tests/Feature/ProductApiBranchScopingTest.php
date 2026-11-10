@@ -49,10 +49,41 @@ class ProductApiBranchScopingTest extends TestCase
 
         Passport::actingAs($user);
 
-        $response = $this->getJson("/api/mobile/products/{$product->id}");
+        // Desde la auditoría run-1 la API aplica el mismo filtro que check.branch
+        // (EnsureApiUserAccess): sin sucursal no hay acceso a /mobile/*.
+        $this->getJson("/api/mobile/products/{$product->id}")->assertForbidden();
+    }
 
-        $response->assertOk();
-        $this->assertCount(0, $response->json('data.inventory'), 'Sin sucursal asignada no debe ver inventario de ninguna sucursal.');
+    public function test_un_usuario_sin_sucursal_no_puede_listar_inventario_eligiendo_branch_id(): void
+    {
+        $branch = $this->makeBranch();
+        $user = $this->makeUser($branch, 'trabajador', ['branch_id' => null]);
+        $this->makeInventory($this->makeProduct(), $branch, 42);
+
+        Passport::actingAs($user);
+
+        $this->getJson("/api/mobile/inventory?branch_id={$branch->id}")->assertForbidden();
+    }
+
+    public function test_un_cliente_no_tiene_acceso_a_la_api_movil(): void
+    {
+        $branch = $this->makeBranch();
+        $cliente = $this->makeUser($branch, 'cliente');
+
+        Passport::actingAs($cliente);
+
+        $this->getJson('/api/mobile/gastos')->assertForbidden();
+    }
+
+    public function test_un_usuario_desactivado_no_puede_usar_su_token(): void
+    {
+        $branch = $this->makeBranch();
+        $user = $this->makeUser($branch, 'trabajador', ['active' => false]);
+
+        Passport::actingAs($user);
+
+        $this->getJson('/api/me')->assertForbidden();
+        $this->getJson('/api/mobile/products')->assertForbidden();
     }
 
     public function test_root_puede_ver_el_inventario_de_todas_las_sucursales(): void
