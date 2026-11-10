@@ -33,7 +33,7 @@ Antes de ejecutar los tests, verificar que lo siguiente esté en orden:
 | Campo | Valor |
 |-------|-------|
 | Email | `admin@admin.com` |
-| Contraseña | `pasword123` |
+| Contraseña | `pasword123` (solo en `APP_ENV=local`/`testing`; en otros entornos el seeder exige `ADMIN_SEED_PASSWORD`) |
 | Rol | `administrador` |
 
 Si el usuario no existe, ejecutar los seeders de Laravel:

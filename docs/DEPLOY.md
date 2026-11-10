@@ -23,7 +23,9 @@ php artisan route:cache
 php artisan view:cache
 ```
 
-`php artisan migrate --force` es seguro de re-correr (Laravel salta las migraciones ya aplicadas). La migración `2025_12_22_000000_seed_initial_data.php` crea los roles y la sucursal principal la primera vez — no hace falta correr seeders aparte en una instalación limpia.
+`php artisan migrate --force` es seguro de re-correr (Laravel salta las migraciones ya aplicadas). La migración `2025_12_22_000000_seed_initial_data.php` crea los roles y la sucursal principal la primera vez.
+
+El primer usuario root se crea con `ADMIN_SEED_PASSWORD=<contraseña de 12+ caracteres> php artisan db:seed --class=AdminUserSeeder --force` (o definiendo `ADMIN_SEED_PASSWORD` en `.env`). Fuera de local/testing el seeder se niega a correr sin esa variable y nunca sobrescribe la contraseña de un root que ya exista. Cambia la contraseña desde el perfil después del primer acceso.
 
 ## 3. Variables críticas de `.env` en producción
 
@@ -37,6 +39,7 @@ php artisan view:cache
 | `MAIL_MAILER` y demás `MAIL_*` | un proveedor real (SMTP/SES/Postmark/etc.) | **Pendiente hoy** (`MAIL_MAILER=log`) — sin esto, "olvidé mi contraseña" no envía nada, solo queda escrito en `storage/logs/laravel.log`. Decidir proveedor antes de depender del self-service de contraseña. |
 | `BACKUP_PG_DUMP_PATH` | ruta al binario `pg_dump` | En Linux normalmente `pg_dump` basta; en Windows/Laragon debe ser la ruta completa al `.exe` |
 | `BACKUP_RETENTION_DAYS` | `14` (ajustable) | Cuántos días se conservan los respaldos antes de borrarse automáticamente |
+| `ADMIN_SEED_PASSWORD` | contraseña de 12+ caracteres, solo para el primer `db:seed` | Sin ella el seeder no crea el root en producción (antes usaba una contraseña fija y pública) |
 | `LOG_LEVEL` | `warning` o `error` (no `debug`) | `debug` en producción puede loguear payloads sensibles y crece sin límite |
 
 ## 4. Checklist post-deploy inmediato

@@ -16,6 +16,13 @@ return [
     'name' => env('APP_NAME', 'Laravel'),
 
     /*
+    | Contraseña del usuario root inicial que crea AdminUserSeeder. Obligatoria
+    | fuera de local/testing; en local se usa la contraseña de desarrollo que
+    | esperan los tests e2e si no se define.
+    */
+    'admin_seed_password' => env('ADMIN_SEED_PASSWORD'),
+
+    /*
     |--------------------------------------------------------------------------
     | Application Environment
     |--------------------------------------------------------------------------
