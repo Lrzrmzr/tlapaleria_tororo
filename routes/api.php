@@ -79,12 +79,14 @@ Route::middleware(['auth:api', 'api.access'])->group(function () {
             Route::delete('/mobile/gastos/{id}', [GastoApiController::class, 'destroy']);
 
             // Faltantes
-            Route::get('/mobile/faltantes', [FaltanteApiController::class, 'index']);
-            Route::get('/mobile/faltantes/{id}', [FaltanteApiController::class, 'show']);
-            Route::post('/mobile/faltantes', [FaltanteApiController::class, 'store']);
-            Route::put('/mobile/faltantes/{id}', [FaltanteApiController::class, 'update']);
-            Route::post('/mobile/faltantes/{id}/complete', [FaltanteApiController::class, 'markAsCompleted']);
-            Route::delete('/mobile/faltantes/{id}', [FaltanteApiController::class, 'destroy']);
+            Route::middleware('role:root,administrador')->group(function () {
+                Route::get('/mobile/faltantes', [FaltanteApiController::class, 'index']);
+                Route::get('/mobile/faltantes/{id}', [FaltanteApiController::class, 'show']);
+                Route::post('/mobile/faltantes', [FaltanteApiController::class, 'store']);
+                Route::put('/mobile/faltantes/{id}', [FaltanteApiController::class, 'update']);
+                Route::post('/mobile/faltantes/{id}/complete', [FaltanteApiController::class, 'markAsCompleted']);
+                Route::delete('/mobile/faltantes/{id}', [FaltanteApiController::class, 'destroy']);
+            });
 
             // Sucursales
             Route::get('/mobile/branches', [BranchApiController::class, 'index']);

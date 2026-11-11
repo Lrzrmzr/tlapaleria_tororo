@@ -52,13 +52,6 @@ Route::middleware(['auth', 'check.branch'])->group(function () {
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 
-    // CRUD Faltantes
-    Route::get('/faltantes', [FaltanteController::class, 'index'])->name('faltantes.index');
-    Route::post('/faltantes', [FaltanteController::class, 'store'])->name('faltantes.store');
-    Route::put('/faltantes/{faltante}', [FaltanteController::class, 'update'])->name('faltantes.update');
-    Route::delete('/faltantes/{faltante}', [FaltanteController::class, 'destroy'])->name('faltantes.destroy');
-    Route::post('/faltantes/confirmar', [FaltanteController::class, 'confirmar'])->name('faltantes.confirmar');
-
     // Ventas
     Route::get('/ventas', [\App\Http\Controllers\VentaController::class, 'index'])->name('ventas.index');
     Route::post('/ventas', [\App\Http\Controllers\VentaController::class, 'store'])->name('ventas.store');
@@ -78,10 +71,6 @@ Route::middleware(['auth', 'check.branch'])->group(function () {
     Route::get('/mermas', [\App\Http\Controllers\MermaController::class, 'index'])->name('mermas.index');
     Route::post('/mermas', [\App\Http\Controllers\MermaController::class, 'store'])->name('mermas.store');
     Route::delete('/mermas/{merma}', [\App\Http\Controllers\MermaController::class, 'destroy'])->name('mermas.destroy');
-
-    // Pedidos recibidos (compras a proveedores)
-    Route::get('/pedidos', [\App\Http\Controllers\PedidoController::class, 'index'])->name('pedidos.index');
-    Route::post('/pedidos', [\App\Http\Controllers\PedidoController::class, 'store'])->name('pedidos.store');
 
     // Proveedores
     Route::get('/proveedores', [\App\Http\Controllers\SupplierController::class, 'index'])->name('proveedores.index');
@@ -123,18 +112,35 @@ Route::middleware(['auth', 'check.branch'])->group(function () {
     Route::get('/auditoria/{id}', [\App\Http\Controllers\AuditController::class, 'show'])->name('auditoria.show');
 });
 
-// Asistente IA — throttle:30,1 = 30 consultas/minuto por usuario para controlar costos de API
-Route::middleware(['auth', 'check.branch', 'throttle:30,1'])->group(function () {
+// ── Solo encargados (root y administrador de sucursal) ────────────────────
+// El trabajador (vendedor) no ve faltantes, pedidos, reportes ni utilidades.
+// El dashboard redirige al trabajador a ventas desde el controller.
+Route::middleware(['auth', 'check.branch', 'role:root,administrador'])->group(function () {
+    // CRUD Faltantes
+    Route::get('/faltantes', [FaltanteController::class, 'index'])->name('faltantes.index');
+    Route::post('/faltantes', [FaltanteController::class, 'store'])->name('faltantes.store');
+    Route::put('/faltantes/{faltante}', [FaltanteController::class, 'update'])->name('faltantes.update');
+    Route::delete('/faltantes/{faltante}', [FaltanteController::class, 'destroy'])->name('faltantes.destroy');
+    Route::post('/faltantes/confirmar', [FaltanteController::class, 'confirmar'])->name('faltantes.confirmar');
+
+    // Pedidos recibidos (compras a proveedores)
+    Route::get('/pedidos', [\App\Http\Controllers\PedidoController::class, 'index'])->name('pedidos.index');
+    Route::post('/pedidos', [\App\Http\Controllers\PedidoController::class, 'store'])->name('pedidos.store');
+});
+
+// Asistente IA (solo encargados: puede calcular utilidades).
+// throttle:30,1 = 30 consultas/minuto por usuario.
+Route::middleware(['auth', 'check.branch', 'role:root,administrador', 'throttle:30,1'])->group(function () {
     Route::post('/asistente', [\App\Http\Controllers\AsistenteController::class, 'consulta'])->name('asistente.consulta');
 });
 
 // Parseo IA de documentos de proveedor — throttle:10,1 = 10 por minuto (imágenes son costosas)
-Route::middleware(['auth', 'check.branch', 'throttle:10,1'])->group(function () {
+Route::middleware(['auth', 'check.branch', 'role:root,administrador', 'throttle:10,1'])->group(function () {
     Route::post('/pedidos/parse', [\App\Http\Controllers\PedidoController::class, 'parseDocumento'])->name('pedidos.parse');
 });
 
-// Reportes & Corte de Caja
-Route::middleware(['auth', 'check.branch'])->group(function () {
+// Reportes (utilidades): solo encargados
+Route::middleware(['auth', 'check.branch', 'role:root,administrador'])->group(function () {
     Route::get('/reportes',           [\App\Http\Controllers\ReporteController::class, 'index'])->name('reportes.index');
     Route::get('/reportes/tendencia', [\App\Http\Controllers\ReporteController::class, 'tendencia'])->name('reportes.tendencia');
     Route::get('/reportes/pdf',       [\App\Http\Controllers\ReporteController::class, 'exportPdf'])->name('reportes.pdf');

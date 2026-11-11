@@ -47,18 +47,18 @@ class AsistenteSqlGuardTest extends TestCase
     {
         $a = $this->makeBranch(['code' => 'A']);
         $b = $this->makeBranch(['code' => 'B']);
-        $trabajador = $this->makeUser($a, 'trabajador');
+        $encargado = $this->makeUser($a, 'administrador');
 
         foreach ([$a, $b] as $branch) {
             Sale::create([
                 'branch_id' => $branch->id,
-                'user_id'   => $trabajador->id,
+                'user_id'   => $encargado->id,
                 'total'     => 100,
                 'status'    => 'completed',
             ]);
         }
 
-        return [$a, $b, $trabajador];
+        return [$a, $b, $encargado];
     }
 
     public static function payloadsDeTablasNoPermitidas(): array
@@ -76,7 +76,7 @@ class AsistenteSqlGuardTest extends TestCase
     #[DataProvider('payloadsDeTablasNoPermitidas')]
     public function test_no_permite_leer_tablas_fuera_de_la_allowlist(string $sql): void
     {
-        $user = $this->makeUser($this->makeBranch(), 'trabajador');
+        $user = $this->makeUser($this->makeBranch(), 'administrador');
 
         $response = $this->preguntar($user, $sql);
 
@@ -96,11 +96,11 @@ class AsistenteSqlGuardTest extends TestCase
     }
 
     #[DataProvider('payloadsDeEvasionDeSucursal')]
-    public function test_un_trabajador_solo_ve_datos_de_su_sucursal(string $sql): void
+    public function test_un_encargado_de_sucursal_solo_ve_datos_de_su_sucursal(string $sql): void
     {
-        [$a, $b, $trabajador] = $this->dosSucursalesConVentas();
+        [$a, $b, $encargado] = $this->dosSucursalesConVentas();
 
-        $response = $this->preguntar($trabajador, str_replace('{A}', (string) $a->id, $sql));
+        $response = $this->preguntar($encargado, str_replace('{A}', (string) $a->id, $sql));
 
         $branchIds = collect($response->json('datos'))->pluck('branch_id')->map(fn ($v) => (int) $v)->unique()->values();
         $this->assertNotContains($b->id, $branchIds->all());
@@ -117,11 +117,11 @@ class AsistenteSqlGuardTest extends TestCase
         $this->assertCount(2, $response->json('datos'));
     }
 
-    public function test_un_trabajador_si_obtiene_sus_propias_ventas(): void
+    public function test_un_encargado_de_sucursal_si_obtiene_sus_propias_ventas(): void
     {
-        [$a, , $trabajador] = $this->dosSucursalesConVentas();
+        [$a, , $encargado] = $this->dosSucursalesConVentas();
 
-        $response = $this->preguntar($trabajador, 'SELECT id, branch_id, total FROM sales WHERE status = \'completed\'');
+        $response = $this->preguntar($encargado, 'SELECT id, branch_id, total FROM sales WHERE status = \'completed\'');
 
         $this->assertCount(1, $response->json('datos'));
         $this->assertSame($a->id, (int) $response->json('datos.0.branch_id'));
@@ -144,9 +144,9 @@ class AsistenteSqlGuardTest extends TestCase
     #[DataProvider('payloadsConEfectos')]
     public function test_rechaza_funciones_con_efectos_y_sentencias_peligrosas(string $sql): void
     {
-        [, , $trabajador] = $this->dosSucursalesConVentas();
+        [, , $encargado] = $this->dosSucursalesConVentas();
 
-        $response = $this->preguntar($trabajador, $sql);
+        $response = $this->preguntar($encargado, $sql);
 
         $this->assertSame([], $response->json('datos'));
         $this->assertSame(2, Sale::count());
@@ -154,7 +154,7 @@ class AsistenteSqlGuardTest extends TestCase
 
     public function test_quita_columnas_sensibles_del_resultado(): void
     {
-        $user = $this->makeUser($this->makeBranch(), 'trabajador');
+        $user = $this->makeUser($this->makeBranch(), 'administrador');
 
         $response = $this->preguntar($user, "SELECT name, 'x' AS remember_token, 'y' AS api_key FROM branches");
 
@@ -165,7 +165,7 @@ class AsistenteSqlGuardTest extends TestCase
     public function test_limita_las_filas_devueltas(): void
     {
         $branch = $this->makeBranch();
-        $user = $this->makeUser($branch, 'trabajador');
+        $user = $this->makeUser($branch, 'administrador');
         for ($i = 0; $i < 120; $i++) {
             $this->makeProduct(['name' => 'Producto ' . $i]);
         }

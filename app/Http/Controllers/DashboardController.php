@@ -14,6 +14,13 @@ class DashboardController extends Controller
 {
     public function index(Request $request)
     {
+        // El dashboard muestra ventas y faltantes de la sucursal: es de
+        // encargados. El login aterriza aquí, así que al trabajador se le
+        // manda a su pantalla de trabajo en lugar de un 403.
+        if (!$request->user()->isManager()) {
+            return redirect()->route('ventas.index');
+        }
+
         // branchId = null para root (ve todo), int para usuarios de sucursal
         $branchId = $request->attributes->get('user_branch_id');
 

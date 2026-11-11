@@ -37,8 +37,11 @@ class VentaController extends Controller
             $query->whereHas('customer', fn($q) => $q->where('name', 'ilike', '%' . $search . '%'));
         }
 
-        $ventas = $query->latest()->get()->map(function ($sale) {
-            $utilidad = $sale->saleDetails->every(fn($d) => $d->cost !== null)
+        // La utilidad (precio - costo) solo la ven root y administrador.
+        $verUtilidad = $request->user()->isManager();
+
+        $ventas = $query->latest()->get()->map(function ($sale) use ($verUtilidad) {
+            $utilidad = $verUtilidad && $sale->saleDetails->every(fn($d) => $d->cost !== null)
                 ? $sale->saleDetails->sum(fn($d) => $d->utilidad)
                 : null;
 

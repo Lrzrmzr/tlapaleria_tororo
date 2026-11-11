@@ -67,7 +67,7 @@ class CuentaPorPagarController extends Controller
                 'branchId'  => $userBranchId,
                 'canDelete' => in_array($roleName, ['root', 'administrador']),
                 'canCreate' => true,
-                'canEdit'   => true,
+                'canEdit'   => in_array($roleName, ['root', 'administrador']),
             ],
         ]);
     }

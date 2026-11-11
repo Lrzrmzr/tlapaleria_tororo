@@ -103,6 +103,16 @@ class User extends Authenticatable
     }
 
     /**
+     * Root o administrador de sucursal (encargado de tienda): roles que ven
+     * reportes, utilidades, pedidos, dashboard y faltantes, y que pueden
+     * editar montos de gastos y cuentas. El trabajador (vendedor) no.
+     */
+    public function isManager(): bool
+    {
+        return $this->roles()->whereIn('name', ['root', 'administrador'])->exists();
+    }
+
+    /**
      * Verifica si es trabajador
      */
     public function isWorker(): bool

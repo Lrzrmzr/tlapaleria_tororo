@@ -10,9 +10,15 @@ class GastoPolicy
 {
     use ChecksBranchScope;
 
-    public function update(User $user, Gasto $gasto): bool
+    public function view(User $user, Gasto $gasto): bool
     {
         return $this->inUserBranch($user, $gasto->branch_id);
+    }
+
+    // El trabajador registra gastos pero no puede modificar uno existente.
+    public function update(User $user, Gasto $gasto): bool
+    {
+        return $user->isManager() && $this->inUserBranch($user, $gasto->branch_id);
     }
 
     public function delete(User $user, Gasto $gasto): bool

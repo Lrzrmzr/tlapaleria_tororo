@@ -152,6 +152,6 @@ const toggleMobileMenu = () => {
         </div>
 
         <!-- Asistente IA flotante -->
-        <AsistenteIA />
+        <AsistenteIA v-if="$page.props.auth?.user?.is_manager" />
     </div>
 </template>

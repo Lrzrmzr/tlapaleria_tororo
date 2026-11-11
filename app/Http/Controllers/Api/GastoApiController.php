@@ -93,7 +93,7 @@ class GastoApiController extends Controller
     public function show(int $id)
     {
         $gasto = Gasto::with('user')->findOrFail($id);
-        $this->authorize('update', $gasto);
+        $this->authorize('view', $gasto);
 
         return response()->json([
             'success' => true,

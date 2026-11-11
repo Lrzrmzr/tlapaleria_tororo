@@ -20,6 +20,10 @@ const isRoot = computed(() => {
     return hasRole('root');
 });
 
+// Root y administrador de sucursal (encargado). El trabajador no ve
+// dashboard, faltantes, pedidos ni reportes (el backend también lo bloquea).
+const isManager = computed(() => !!page.props.auth?.user?.is_manager);
+
 // Get faltantes count from page props if available
 const faltantesPendientes = computed(() => {
     return page.props.faltantesPendientes || 0;
@@ -35,6 +39,7 @@ const menuSections = computed(() => [
                 route: 'dashboard',
                 icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6',
                 active: route().current('dashboard'),
+                visible: isManager.value,
             },
         ],
     },
@@ -93,6 +98,7 @@ const menuSections = computed(() => [
                 route: 'faltantes.index',
                 icon: 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z',
                 active: route().current('faltantes.*'),
+                visible: isManager.value,
                 badge: faltantesPendientes.value > 0 ? faltantesPendientes.value : null,
             },
         ],
@@ -117,6 +123,7 @@ const menuSections = computed(() => [
                 route: 'pedidos.index',
                 icon: 'M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4',
                 active: route().current('pedidos.*'),
+                visible: isManager.value,
             },
             {
                 name: 'Gastos',
@@ -129,6 +136,7 @@ const menuSections = computed(() => [
                 route: 'reportes.index',
                 icon: 'M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z',
                 active: route().current('reportes.*'),
+                visible: isManager.value,
             },
         ],
     },
@@ -171,9 +179,12 @@ const menuSections = computed(() => [
                 active: route().current('settings.*'),
                 visible: isRoot.value,
             },
-        ].filter(item => item.visible !== false),
+        ],
     },
-]);
+].map(section => ({
+    ...section,
+    items: section.items.filter(item => item.visible !== false),
+})).filter(section => section.items.length > 0));
 
 const toggleSidebar = () => {
     emit('toggle');

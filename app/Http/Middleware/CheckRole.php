@@ -28,6 +28,11 @@ class CheckRole
             }
         }
 
+        // Las rutas web (Inertia) necesitan la página 403 normal, no un JSON.
+        if (!$request->expectsJson()) {
+            abort(403, 'No tienes permisos para acceder a este recurso');
+        }
+
         return response()->json([
             'message' => 'No tienes permisos para acceder a este recurso'
         ], 403);
