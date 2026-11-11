@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\InventoryMovement;
 use App\Models\Sale;
+use App\Services\CajaService;
 use App\Services\VentaService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use RuntimeException;
@@ -136,6 +137,59 @@ class VentaServiceTest extends TestCase
 
         $primera = $this->service()->registrarCatalogo($items, 'efectivo', null, 'clave-123', $branch->id, $user->id);
         $segunda = $this->service()->registrarCatalogo($items, 'efectivo', null, 'clave-123', $branch->id, $user->id);
+
+        $this->assertSame($primera->id, $segunda->id);
+        $this->assertSame(1, Sale::count());
+        $this->assertSame(9, $product->branchInventory()->first()->stock);
+    }
+
+    public function test_la_misma_clave_de_idempotencia_en_otro_usuario_registra_su_propia_venta(): void
+    {
+        $branch = $this->makeBranch();
+        $vendedorA = $this->makeUser($branch);
+        $vendedorB = $this->makeUser($branch);
+        $product = $this->makeProduct();
+        $this->makeInventory($product, $branch, 10);
+        $this->abrirCaja($branch, $vendedorA);
+
+        $items = [['product_id' => $product->id, 'quantity' => 1]];
+
+        $deA = $this->service()->registrarCatalogo($items, 'efectivo', null, 'clave-compartida', $branch->id, $vendedorA->id);
+        $deB = $this->service()->registrarCatalogo($items, 'efectivo', null, 'clave-compartida', $branch->id, $vendedorB->id);
+
+        $this->assertNotSame($deA->id, $deB->id);
+        $this->assertSame($vendedorB->id, $deB->user_id);
+        $this->assertSame(2, Sale::count());
+        $this->assertSame(8, $product->branchInventory()->first()->stock);
+    }
+
+    public function test_si_la_clave_choca_en_la_bd_devuelve_la_venta_existente_sin_error(): void
+    {
+        $branch = $this->makeBranch();
+        $user = $this->makeUser($branch);
+        $product = $this->makeProduct();
+        $this->makeInventory($product, $branch, 10);
+        $this->abrirCaja($branch, $user);
+
+        $items = [['product_id' => $product->id, 'quantity' => 1]];
+        $primera = $this->service()->registrarCatalogo($items, 'efectivo', null, 'clave-carrera', $branch->id, $user->id);
+
+        // Simula la carrera: el chequeo previo no ve la venta (la otra petición
+        // la insertó entre el SELECT y el INSERT) y el índice único rechaza el insert.
+        $service = new class(app(CajaService::class)) extends VentaService {
+            private bool $primeraConsulta = true;
+
+            protected function ventaPrevia(int $userId, ?string $idempotencyKey): ?Sale
+            {
+                if ($this->primeraConsulta) {
+                    $this->primeraConsulta = false;
+                    return null;
+                }
+                return parent::ventaPrevia($userId, $idempotencyKey);
+            }
+        };
+
+        $segunda = $service->registrarCatalogo($items, 'efectivo', null, 'clave-carrera', $branch->id, $user->id);
 
         $this->assertSame($primera->id, $segunda->id);
         $this->assertSame(1, Sale::count());

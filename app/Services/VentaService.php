@@ -8,6 +8,7 @@ use App\Models\Product;
 use App\Models\Sale;
 use App\Models\SaleDetail;
 use App\Models\SystemSetting;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
@@ -26,11 +27,9 @@ class VentaService
             throw new RuntimeException('Las ventas libres están deshabilitadas.');
         }
 
-        if (!empty($data['idempotency_key'])) {
-            $existing = Sale::where('idempotency_key', $data['idempotency_key'])->first();
-            if ($existing) {
-                return $existing;
-            }
+        $idempotencyKey = $data['idempotency_key'] ?? null;
+        if ($existing = $this->ventaPrevia($userId, $idempotencyKey)) {
+            return $existing;
         }
 
         $metodoPago = $data['metodo_pago'] ?? 'efectivo';
@@ -44,7 +43,7 @@ class VentaService
             $this->caja->assertAbierta($branchId);
         }
 
-        return DB::transaction(function () use ($data, $branchId, $userId, $metodoPago) {
+        return $this->unaSolaVez($userId, $idempotencyKey, fn () => DB::transaction(function () use ($data, $branchId, $userId, $metodoPago) {
             $venta = Sale::create([
                 'user_id'         => $userId,
                 'branch_id'       => $branchId,
@@ -69,7 +68,7 @@ class VentaService
             ]);
 
             return $venta;
-        });
+        }));
     }
 
     /**
@@ -86,16 +85,13 @@ class VentaService
         ?int $branchId,
         int $userId
     ): Sale {
-        if ($idempotencyKey) {
-            $existing = Sale::where('idempotency_key', $idempotencyKey)->first();
-            if ($existing) {
-                return $existing;
-            }
+        if ($existing = $this->ventaPrevia($userId, $idempotencyKey)) {
+            return $existing;
         }
 
         $metodoPago = $metodoPago ?? 'efectivo';
 
-        return DB::transaction(function () use ($items, $metodoPago, $fechaVenta, $idempotencyKey, $branchId, $userId) {
+        return $this->unaSolaVez($userId, $idempotencyKey, fn () => DB::transaction(function () use ($items, $metodoPago, $fechaVenta, $idempotencyKey, $branchId, $userId) {
             $productIds = collect($items)->pluck('product_id')->unique();
             $products   = Product::whereIn('id', $productIds)->get()->keyBy('id');
 
@@ -168,7 +164,7 @@ class VentaService
             }
 
             return $venta;
-        });
+        }));
     }
 
     /**
@@ -218,5 +214,41 @@ class VentaService
 
             return $venta->fresh();
         });
+    }
+
+    /**
+     * La clave de idempotencia la genera el cliente, así que solo identifica
+     * un reintento del MISMO usuario. Buscarla de forma global permitía que
+     * otro usuario (u otra sucursal) que mandara la misma clave recibiera la
+     * venta ajena en lugar de registrar la suya.
+     */
+    protected function ventaPrevia(int $userId, ?string $idempotencyKey): ?Sale
+    {
+        if (!$idempotencyKey) {
+            return null;
+        }
+
+        return Sale::where('user_id', $userId)
+            ->where('idempotency_key', $idempotencyKey)
+            ->first();
+    }
+
+    /**
+     * Dos envíos simultáneos con la misma clave pasan ambos el chequeo previo;
+     * el índice único (user_id, idempotency_key) hace fallar al segundo, y aquí
+     * se devuelve la venta que ganó en lugar de un error 500.
+     *
+     * @param \Closure(): Sale $registrar
+     */
+    private function unaSolaVez(int $userId, ?string $idempotencyKey, \Closure $registrar): Sale
+    {
+        try {
+            return $registrar();
+        } catch (UniqueConstraintViolationException $e) {
+            if ($existing = $this->ventaPrevia($userId, $idempotencyKey)) {
+                return $existing;
+            }
+            throw $e;
+        }
     }
 }
