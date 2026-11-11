@@ -3,6 +3,7 @@ import { ref, computed, watch } from 'vue';
 import { router, useForm, Head } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import axios from 'axios';
+import CuotaIA from '@/Components/CuotaIA.vue';
 
 const props = defineProps({
     pedidos:                  Array,
@@ -14,6 +15,7 @@ const props = defineProps({
     filters:                  Object,
     user:                     Object,
     groqConfigurado:          Boolean,
+    cuotaVision:              { type: Object, default: null },
 });
 
 // ── UI State ──────────────────────────────────────────────────────────────────
@@ -114,6 +116,7 @@ function submitForm() {
 const archivoIA      = ref(null);
 const archivoPreview = ref(null);
 const parseando      = ref(false);
+const cuotaIA        = ref(props.cuotaVision);
 const resultadoIA    = ref(null);
 const errorIA        = ref('');
 const inputArchivoRef = ref(null);
@@ -159,7 +162,9 @@ async function analizarDocumento() {
             headers: { 'Content-Type': 'multipart/form-data' },
         });
         resultadoIA.value = res.data.data;
+        if (res.data.cuota) cuotaIA.value = res.data.cuota;
     } catch (err) {
+        if (err.response?.data?.cuota) cuotaIA.value = err.response.data.cuota;
         errorIA.value = err.response?.data?.error ?? 'Error al analizar el documento.';
     } finally {
         parseando.value = false;
@@ -500,6 +505,7 @@ function toggleExpansion(id) {
                             </svg>
                             {{ parseando ? 'Analizando nota...' : 'Analizar con IA' }}
                         </button>
+                        <CuotaIA v-if="groqConfigurado" :cuota="cuotaIA" unidad="análisis" class="text-gray-500 dark:text-gray-400" />
 
                         <!-- Error -->
                         <p v-if="errorIA" class="text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-lg px-3 py-2">{{ errorIA }}</p>

@@ -132,6 +132,7 @@ Route::middleware(['auth', 'check.branch', 'role:root,administrador'])->group(fu
 // throttle:30,1 = 30 consultas/minuto por usuario.
 Route::middleware(['auth', 'check.branch', 'role:root,administrador', 'throttle:30,1'])->group(function () {
     Route::post('/asistente', [\App\Http\Controllers\AsistenteController::class, 'consulta'])->name('asistente.consulta');
+    Route::get('/asistente/cuota', [\App\Http\Controllers\AsistenteController::class, 'cuota'])->name('asistente.cuota');
 });
 
 // Parseo IA de documentos de proveedor — throttle:10,1 = 10 por minuto (imágenes son costosas)

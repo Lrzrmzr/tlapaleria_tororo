@@ -40,6 +40,9 @@ return [
         'model'        => env('GROQ_MODEL', 'llama-3.3-70b-versatile'),
         'model_vision' => env('GROQ_MODEL_VISION', 'meta-llama/llama-4-scout-17b-16e-instruct'),
         'url'          => 'https://api.groq.com/openai/v1/chat/completions',
+        // Tope propio de peticiones por día y modelo (opcional, más bajo que el
+        // límite gratuito de Groq). Vacío = solo se respetan los límites de Groq.
+        'daily_limit'  => env('GROQ_DAILY_LIMIT'),
     ],
 
 ];

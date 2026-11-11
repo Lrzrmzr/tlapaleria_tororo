@@ -40,6 +40,8 @@ El primer usuario root se crea con `ADMIN_SEED_PASSWORD=<contraseña de 12+ cara
 | `BACKUP_PG_DUMP_PATH` | ruta al binario `pg_dump` | En Linux normalmente `pg_dump` basta; en Windows/Laragon debe ser la ruta completa al `.exe` |
 | `BACKUP_RETENTION_DAYS` | `14` (ajustable) | Cuántos días se conservan los respaldos antes de borrarse automáticamente |
 | `ADMIN_SEED_PASSWORD` | contraseña de 12+ caracteres, solo para el primer `db:seed` | Sin ella el seeder no crea el root en producción (antes usaba una contraseña fija y pública) |
+| `GROQ_API_KEY` | API key de Groq de **plan gratuito** (sin método de pago) | En plan gratuito Groq responde 429 al pasarse en lugar de cobrar; la app además deja de llamar al llegar a 0 y muestra la cuota restante en el asistente y en Pedidos |
+| `GROQ_DAILY_LIMIT` | opcional, peticiones por día y modelo | Tope propio más bajo que el de Groq. Cada pregunta al asistente usa 2 peticiones; cada nota analizada, 1 |
 | `LOG_LEVEL` | `warning` o `error` (no `debug`) | `debug` en producción puede loguear payloads sensibles y crece sin límite |
 
 ## 4. Checklist post-deploy inmediato

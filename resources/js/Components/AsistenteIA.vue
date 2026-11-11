@@ -1,6 +1,7 @@
 <script setup>
 import { ref, nextTick } from 'vue';
 import axios from 'axios';
+import CuotaIA from '@/Components/CuotaIA.vue';
 
 const abierto    = ref(false);
 const pregunta   = ref('');
@@ -13,6 +14,7 @@ const mensajes   = ref([
         columnas: [],
     },
 ]);
+const cuota         = ref(null);
 const inputRef      = ref(null);
 const mensajesRef   = ref(null);
 
@@ -30,8 +32,18 @@ async function scrollAbajo() {
     }
 }
 
+async function cargarCuota() {
+    try {
+        const { data } = await axios.get('/asistente/cuota');
+        cuota.value = data;
+    } catch {
+        // Sin cuota visible el asistente sigue funcionando.
+    }
+}
+
 function abrir() {
     abierto.value = true;
+    cargarCuota();
     nextTick(() => inputRef.value?.focus());
     scrollAbajo();
 }
@@ -52,6 +64,7 @@ async function enviar() {
 
     try {
         const { data } = await axios.post('/asistente', { pregunta: texto });
+        if (data.cuota) cuota.value = data.cuota;
 
         mensajes.value.push({
             tipo:     'ia',
@@ -61,6 +74,7 @@ async function enviar() {
             error:    !!data.error,
         });
     } catch (e) {
+        if (e.response?.data?.cuota) cuota.value = e.response.data.cuota;
         const msg = e.response?.data?.error
             || e.response?.data?.respuesta
             || 'No se pudo contactar el asistente. Verifica tu conexión e intenta de nuevo.';
@@ -139,7 +153,7 @@ function usarSugerencia(s) {
                     </div>
                     <div class="flex-1 min-w-0">
                         <div class="font-semibold text-sm">Asistente IA</div>
-                        <div class="text-xs text-blue-200">Pregunta sobre el negocio</div>
+                        <CuotaIA :cuota="cuota" :por-consulta="2" unidad="preguntas" class="text-blue-100" />
                     </div>
                     <button @click="cerrar"
                             class="w-7 h-7 rounded-lg hover:bg-white/20 flex items-center justify-center transition-colors">

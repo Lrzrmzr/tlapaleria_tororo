@@ -3,14 +3,37 @@
 namespace App\Http\Controllers;
 
 use App\Services\AsistenteSqlGuard;
+use App\Services\GroqClient;
+use App\Services\GroqCuotaAgotada;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 class AsistenteController extends Controller
 {
-    public function __construct(private readonly AsistenteSqlGuard $sqlGuard)
+    public function __construct(
+        private readonly AsistenteSqlGuard $sqlGuard,
+        private readonly GroqClient $groq,
+    ) {
+    }
+
+    /**
+     * Cuota gratuita restante de Groq para el asistente. Cada pregunta usa
+     * dos peticiones (generar SQL y resumir).
+     */
+    public function cuota()
     {
+        return response()->json($this->estadoCuota());
+    }
+
+    private function estadoCuota(): array
+    {
+        $estado = $this->groq->estado((string) config('services.groq.model'));
+        $estado['preguntas_restantes'] = $estado['restantes_dia'] === null
+            ? null
+            : intdiv((int) $estado['restantes_dia'], 2);
+        $estado['configurado'] = $this->groq->configurado();
+
+        return $estado;
     }
 
     public function consulta(Request $request)
@@ -20,9 +43,8 @@ class AsistenteController extends Controller
         $pregunta     = trim($request->pregunta);
         $branchId     = $request->attributes->get('user_branch_id');
         $isRoot       = (bool) ($request->attributes->get('is_root') ?? false);
-        $apiKey       = config('services.groq.api_key');
 
-        if (!$apiKey) {
+        if (!$this->groq->configurado()) {
             return response()->json([
                 'respuesta' => 'El asistente de IA no está configurado. Agrega GROQ_API_KEY en el archivo .env.',
                 'datos'     => [],
@@ -32,18 +54,15 @@ class AsistenteController extends Controller
 
         // ── 1. Generar SQL via Groq ───────────────────────────────────────────
         try {
-            $groqResp = Http::withToken($apiKey)
-                ->timeout(25)
-                ->post(config('services.groq.url'), [
-                    'model'           => config('services.groq.model'),
-                    'temperature'     => 0.05,
-                    'max_tokens'      => 600,
-                    'response_format' => ['type' => 'json_object'],
-                    'messages'        => [
-                        ['role' => 'system', 'content' => $this->systemPrompt($branchId, $isRoot)],
-                        ['role' => 'user',   'content' => $pregunta],
-                    ],
-                ]);
+            $groqResp = $this->groq->chat((string) config('services.groq.model'), [
+                'temperature'     => 0.05,
+                'max_tokens'      => 600,
+                'response_format' => ['type' => 'json_object'],
+                'messages'        => [
+                    ['role' => 'system', 'content' => $this->systemPrompt($branchId, $isRoot)],
+                    ['role' => 'user',   'content' => $pregunta],
+                ],
+            ], 25);
 
             if (!$groqResp->successful()) {
                 Log::error('Groq API error', ['status' => $groqResp->status(), 'body' => $groqResp->body()]);
@@ -54,6 +73,13 @@ class AsistenteController extends Controller
             $sql         = $parsed['sql'] ?? null;
             $descripcion = $parsed['descripcion'] ?? '';
 
+        } catch (GroqCuotaAgotada $e) {
+            return response()->json([
+                'respuesta' => $e->getMessage(),
+                'datos'     => [],
+                'columnas'  => [],
+                'cuota'     => $this->estadoCuota(),
+            ], 429);
         } catch (\Exception $e) {
             Log::error('Groq request failed', ['error' => $e->getMessage()]);
             return response()->json(['error' => 'No se pudo conectar con el modelo de IA.'], 502);
@@ -96,12 +122,13 @@ class AsistenteController extends Controller
         }
 
         // ── 5. Resumir resultados en lenguaje natural ─────────────────────────
-        $respuesta = $this->resumirResultados($apiKey, $pregunta, $descripcion, $datos);
+        $respuesta = $this->resumirResultados($pregunta, $descripcion, $datos);
 
         return response()->json([
             'respuesta' => $respuesta,
             'datos'     => $datos,
             'columnas'  => $columnas,
+            'cuota'     => $this->estadoCuota(),
         ]);
     }
 
@@ -171,7 +198,7 @@ PROMPT;
     }
 
     // ── Segunda llamada: resumir los resultados en lenguaje natural ───────────
-    private function resumirResultados(string $apiKey, string $pregunta, string $descripcion, array $datos): string
+    private function resumirResultados(string $pregunta, string $descripcion, array $datos): string
     {
         if (empty($datos)) {
             return trim($descripcion) ? "{$descripcion} — No se encontraron resultados." : "No se encontraron resultados para tu consulta.";
@@ -189,17 +216,14 @@ PROMPT;
             . "Menciona los datos más relevantes. Máximo 4 líneas. Sin formalidades.";
 
         try {
-            $resp = Http::withToken($apiKey)
-                ->timeout(20)
-                ->post(config('services.groq.url'), [
-                    'model'       => config('services.groq.model'),
-                    'temperature' => 0.3,
-                    'max_tokens'  => 250,
-                    'messages'    => [
-                        ['role' => 'system', 'content' => 'Eres un asistente conciso de una tlapalería. Responde en español, directo al punto.'],
-                        ['role' => 'user',   'content' => $prompt],
-                    ],
-                ]);
+            $resp = $this->groq->chat((string) config('services.groq.model'), [
+                'temperature' => 0.3,
+                'max_tokens'  => 250,
+                'messages'    => [
+                    ['role' => 'system', 'content' => 'Eres un asistente conciso de una tlapalería. Responde en español, directo al punto.'],
+                    ['role' => 'user',   'content' => $prompt],
+                ],
+            ], 20);
 
             if ($resp->successful()) {
                 return trim($resp->json('choices.0.message.content') ?? $descripcion);

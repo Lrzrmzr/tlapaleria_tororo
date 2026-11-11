@@ -15,7 +15,6 @@ use App\Models\SystemSetting;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
@@ -79,6 +78,7 @@ class PedidoController extends Controller
                 'branchId' => $branchId,
             ],
             'groqConfigurado' => !empty(config('services.groq.api_key')),
+            'cuotaVision'     => app(\App\Services\GroqClient::class)->estado((string) config('services.groq.model_vision')),
         ]);
     }
 
@@ -243,8 +243,8 @@ class PedidoController extends Controller
             'archivo' => 'required|file|mimes:jpg,jpeg,png,webp|max:10240',
         ]);
 
-        $apiKey = config('services.groq.api_key');
-        if (!$apiKey) {
+        $groq = app(\App\Services\GroqClient::class);
+        if (!$groq->configurado()) {
             return response()->json(['error' => 'El análisis con IA no está configurado. Agrega GROQ_API_KEY en el archivo .env.'], 422);
         }
 
@@ -276,22 +276,20 @@ Si no puedes leer un campo claramente, devuelve null en ese campo.
 PROMPT;
 
         try {
-            $resp = Http::withToken($apiKey)
-                ->timeout(45)
-                ->post(config('services.groq.url'), [
-                    'model'       => config('services.groq.model_vision'),
-                    'temperature' => 0.1,
-                    'max_tokens'  => 2000,
-                    'messages'    => [
-                        [
-                            'role'    => 'user',
-                            'content' => [
-                                ['type' => 'image_url', 'image_url' => ['url' => $dataUrl]],
-                                ['type' => 'text', 'text' => $prompt],
-                            ],
+            $modelo = (string) config('services.groq.model_vision');
+            $resp = $groq->chat($modelo, [
+                'temperature' => 0.1,
+                'max_tokens'  => 2000,
+                'messages'    => [
+                    [
+                        'role'    => 'user',
+                        'content' => [
+                            ['type' => 'image_url', 'image_url' => ['url' => $dataUrl]],
+                            ['type' => 'text', 'text' => $prompt],
                         ],
                     ],
-                ]);
+                ],
+            ], 45);
 
             if (!$resp->successful()) {
                 Log::error('Groq vision error', ['status' => $resp->status(), 'body' => $resp->body()]);
@@ -310,8 +308,10 @@ PROMPT;
                 return response()->json(['error' => 'El modelo no pudo extraer datos estructurados. Intenta con una imagen más clara.'], 422);
             }
 
-            return response()->json(['data' => $parsed]);
+            return response()->json(['data' => $parsed, 'cuota' => $groq->estado($modelo)]);
 
+        } catch (\App\Services\GroqCuotaAgotada $e) {
+            return response()->json(['error' => $e->getMessage(), 'cuota' => $groq->estado((string) config('services.groq.model_vision'))], 429);
         } catch (\Exception $e) {
             Log::error('PedidoController::parseDocumento', ['error' => $e->getMessage()]);
             return response()->json(['error' => 'Error al contactar el servicio de IA.'], 502);
